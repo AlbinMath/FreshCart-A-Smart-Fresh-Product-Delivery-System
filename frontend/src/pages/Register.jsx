@@ -26,7 +26,7 @@ function Register() {
   const [emailStatus, setEmailStatus] = useState(""); // '', 'checking', 'available', 'taken'
   const [passwordIssues, setPasswordIssues] = useState([]);
   const [businessLicenseValidation, setBusinessLicenseValidation] = useState({ isValid: true, message: '' });
-  const { signup, checkEmailAvailable, validatePasswordLive } = useAuth();
+  const { signup, checkEmailAvailable, validatePasswordLive, logout } = useAuth();
   const navigate = useNavigate();
   
   // Use back button handler
@@ -102,12 +102,11 @@ function Register() {
       
       // Show success message with email verification info
       setError("");
-      setMessage("Account created successfully! Please check your email for a verification link before proceeding.");
+      setMessage("Account created successfully! Please check your email for a verification link.");
       
-      // Redirect to home page after a delay
-      setTimeout(() => {
-        navigate("/", { replace: true });
-      }, 3000);
+      // Enforce login before access: sign out and redirect to login
+      try { await logout(); } catch(_) {}
+      navigate("/login", { replace: true });
     } catch (error) {
       setError("Failed to create account: " + error.message);
     }

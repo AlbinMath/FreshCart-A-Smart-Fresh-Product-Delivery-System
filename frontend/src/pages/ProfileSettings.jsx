@@ -12,6 +12,14 @@ export default function ProfileSettings() {
 
   useEffect(() => {
     if (!currentUser) { navigate('/login'); return; }
+    
+    // Check if user is admin - admins cannot edit profiles
+    const profile = getUserProfile();
+    if (profile?.role === 'admin') {
+      navigate('/admin', { replace: true });
+      return;
+    }
+    
     (async () => {
       const backend = await fetchUserProfile();
       const local = getUserProfile();
@@ -22,7 +30,7 @@ export default function ProfileSettings() {
         profilePicture: src.profilePicture || "",
       });
     })();
-  }, [currentUser]);
+  }, [currentUser, navigate, getUserProfile]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -61,8 +69,30 @@ export default function ProfileSettings() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Profile Picture URL</label>
             <input name="profilePicture" value={form.profilePicture} onChange={handleChange} placeholder="https://.../photo.jpg" className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" />
-            <p className="mt-1 text-xs text-gray-500">Use a direct image URL (jpg, jpeg, png, gif, webp). Admins don’t need verification for this.</p>
+            <p className="mt-1 text-xs text-gray-500">Use a direct image URL (jpg, jpeg, png, gif, webp). Admins don't need verification for this.</p>
           </div>
+          
+          {/* License Upload Link for Sellers */}
+          {getUserProfile()?.role === 'seller' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-medium text-blue-900">Business License Document</h4>
+                  <p className="text-xs text-blue-700 mt-1">Upload your business license for verification</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/seller/license-upload')}
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                  </svg>
+                  Upload License
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex gap-2 justify-end">
             <button type="button" onClick={() => navigate(-1)} className="px-4 py-2 border rounded-lg">Back</button>
             <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg bg-green-600 text-white disabled:bg-green-400">{loading ? 'Saving...' : 'Save'}</button>

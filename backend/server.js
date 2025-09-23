@@ -14,7 +14,8 @@ import productUploadRoutes from './routes/productUploadRoutes.js';
 import activityRoutes from './routes/activityRoutes.js';
 import walletRoutes from './routes/walletRoutes.js';
 import licenseRoutes from './routes/licenseRoutes.js';
-// import adminLicenseRoutes from './routes/adminLicenseRoutes.js';
+// Notifications feature removed
+import adminLicenseRoutes from './routes/adminLicenseRoutes.js';
 import { logActivity } from './middleware/activityLogger.js';
 import Activity from './models/Activity.js';
 
@@ -60,7 +61,9 @@ app.use('/api/upload', productUploadRoutes);
 app.use('/api', productRoutes);
 app.use('/api/users', walletRoutes); // Wallet routes
 app.use('/api/license', licenseRoutes); // License routes
-// app.use('/api/admin/licenses', adminLicenseRoutes); // Admin license management
+// Notifications feature removed
+// app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin/licenses', adminLicenseRoutes); // Admin license management
 
 // Basic Route
 app.get('/', (req, res) => res.send('FreshCart API Running'));
@@ -88,24 +91,27 @@ app.use((err, req, res, next) => {
     params: req.params
   });
 
-  // Log the error to activity log
-  Activity.create({
-    actorUid: req.user?.uid || 'system',
-    actorEmail: req.user?.email || 'system@freshcart.com',
-    actorRole: req.user?.role || 'system',
-    action: 'error',
-    actionType: 'system',
-    status: 'failed',
-    details: {
-      method: req.method,
-      path: req.path,
-      error: err.message,
-      statusCode: err.statusCode || 500,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-    },
-    ipAddress: req.ip,
-    userAgent: req.get('user-agent')
-  }).catch(console.error);
+  // Log the error to activity log (skip if no actor)
+  const errorActorUid = req.user?.uid || req.user?.id ? String(req.user?.uid || req.user?.id) : null;
+  if (errorActorUid) {
+    Activity.create({
+      actorUid: errorActorUid,
+      actorEmail: req.user?.email || 'system@freshcart.com',
+      actorRole: req.user?.role || 'system',
+      action: 'error',
+      actionType: 'system',
+      status: 'failed',
+      details: {
+        method: req.method,
+        path: req.path,
+        error: err.message,
+        statusCode: err.statusCode || 500,
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent')
+    }).catch(console.error);
+  }
 
   // Send error response
   const statusCode = err.statusCode || 500;

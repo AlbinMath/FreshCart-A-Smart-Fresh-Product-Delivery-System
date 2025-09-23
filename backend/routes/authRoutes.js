@@ -1,11 +1,10 @@
 import express from 'express';
-import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { logUserActivity } from '../middleware/activityLogger.js';
 
 const router = express.Router();
 
-// Register User
+// Register User (no JWT issuance; frontend uses Firebase ID token)
 router.post('/register', async (req, res) => {
   try {
     const { 
@@ -27,7 +26,6 @@ router.post('/register', async (req, res) => {
     if (role === 'seller' && (!storeAddress || String(storeAddress).trim() === '')) {
       return res.status(400).json({ success: false, message: 'storeAddress is required for seller accounts' });
     }
-
 
     // Create new user with role-specific fields
     const userData = {
@@ -74,14 +72,7 @@ router.post('/register', async (req, res) => {
       { provider: user.provider, accountStatus: user.accountStatus }
     );
 
-    // Create JWT token
-    const token = jwt.sign(
-      { userId: user._id, uid: user.uid, role: user.role },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '7d' }
-    );
-
-    // Return user data (without password)
+    // Return user data (without password). No JWT returned now.
     const userResponse = {
       _id: user._id,
       uid: user.uid,
@@ -91,8 +82,7 @@ router.post('/register', async (req, res) => {
       phone: user.phone,
       provider: user.provider,
       emailVerified: user.emailVerified,
-      storeName: user.storeName,
-      token
+      storeName: user.storeName
     };
 
     res.status(201).json({ 
@@ -111,7 +101,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Login User
+// Login User (no JWT issuance; frontend should use Firebase sign-in to obtain ID token)
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -134,14 +124,7 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Create JWT token
-    const token = jwt.sign(
-      { userId: user._id, uid: user.uid, role: user.role },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '7d' }
-    );
-
-    // Return user data (without password)
+    // Return user data (without password). No JWT returned.
     const userResponse = {
       _id: user._id,
       uid: user.uid,
@@ -164,8 +147,7 @@ router.post('/login', async (req, res) => {
     res.json({
       success: true,
       message: 'Login successful',
-      user: userResponse,
-      token
+      user: userResponse
     });
 
   } catch (error) {
@@ -252,6 +234,8 @@ router.post('/change-password', async (req, res) => {
     });
   }
 });
+
+// Refresh Token endpoint removed (Firebase ID tokens are refreshed client-side)
 
 // Test endpoint for connectivity
 router.get('/test', (req, res) => {

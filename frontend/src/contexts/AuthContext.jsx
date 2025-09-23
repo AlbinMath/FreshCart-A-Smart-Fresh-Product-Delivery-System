@@ -15,6 +15,7 @@ import {
   fetchSignInMethodsForEmail,
   reload
 } from "firebase/auth";
+import authService from "../services/authService";
 
 const AuthContext = React.createContext();
 
@@ -27,7 +28,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   // Backend API URL
-  const API_BASE_URL = 'http://localhost:5000/api';
+  const RAW_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').trim();
+  const API_BASE_URL = RAW_BASE.replace(/\/+$/, '');
 
   // Register function with backend integration
   async function signup(email, password, name, role, additionalInfo = {}) {
@@ -89,6 +91,14 @@ export function AuthProvider({ children }) {
 
       const savedUser = await response.json();
       console.log('User saved to backend:', savedUser);
+      // Store backend JWT if returned
+      try {
+        if (savedUser?.token) {
+          localStorage.setItem('token', savedUser.token);
+        } else if (savedUser?.user?.token) {
+          localStorage.setItem('token', savedUser.user.token);
+        }
+      } catch (_) {}
 
       // 5. Store additional user information in localStorage
       const userProfile = {
@@ -161,6 +171,13 @@ export function AuthProvider({ children }) {
             if (saved.user) {
               localStorage.setItem(`userProfile_${uid}`, JSON.stringify(saved.user));
             }
+            try {
+              if (saved?.token) {
+                localStorage.setItem('token', saved.token);
+              } else if (saved?.user?.token) {
+                localStorage.setItem('token', saved.user.token);
+              }
+            } catch (_) {}
           } else {
             console.warn('Failed to auto-create admin in backend');
           }
@@ -174,7 +191,28 @@ export function AuthProvider({ children }) {
       console.log('User profile from backend:', userData);
       if (userData.user) {
         localStorage.setItem(`userProfile_${uid}`, JSON.stringify(userData.user));
+      } else {
+        // If backend doesn't return user data, create a basic profile
+        const basicProfile = {
+          uid: userCredential.user.uid,
+          email: userCredential.user.email,
+          name: userCredential.user.displayName || userCredential.user.email?.split('@')[0] || 'User',
+          role: 'customer',
+          profilePicture: userCredential.user.photoURL,
+          provider: 'email',
+          emailVerified: userCredential.user.emailVerified,
+          createdAt: new Date().toISOString()
+        };
+        localStorage.setItem(`userProfile_${uid}`, JSON.stringify(basicProfile));
       }
+      // Store backend JWT if returned
+      try {
+        if (userData?.token) {
+          localStorage.setItem('token', userData.token);
+        } else if (userData?.user?.token) {
+          localStorage.setItem('token', userData.user.token);
+        }
+      } catch (_) {}
 
       return userCredential;
     } catch (error) {
@@ -184,11 +222,37 @@ export function AuthProvider({ children }) {
   }
 
   // Logout function
-  function logout() {
-    if (currentUser) {
-      localStorage.removeItem(`userProfile_${currentUser.uid}`);
+  async function logout() {
+    try {
+      // Clear auth service state
+      authService.clearAuthState();
+      
+      // Clear all localStorage data
+      if (currentUser) {
+        localStorage.removeItem(`userProfile_${currentUser.uid}`);
+      }
+      localStorage.removeItem('token');
+      localStorage.removeItem('remember_me');
+      
+      // Clear any other auth-related localStorage items
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('userProfile_') || key.includes('auth') || key.includes('token')) {
+          localStorage.removeItem(key);
+        }
+      });
+      
+      // Sign out from Firebase
+      await signOut(auth);
+      
+      // Force reload to clear any cached state
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Even if there's an error, clear local storage and redirect
+      authService.clearAuthState();
+      localStorage.clear();
+      window.location.href = '/login';
     }
-    return signOut(auth);
   }
 
   // Delete account (non-admin). Deletes Firebase auth user and backend record.
@@ -287,6 +351,14 @@ export function AuthProvider({ children }) {
                 if (existingUser.user) {
                   localStorage.setItem(`userProfile_${user.uid}`, JSON.stringify(existingUser.user));
                 }
+                // Store token if present
+                try {
+                  if (existingUser?.token) {
+                    localStorage.setItem('token', existingUser.token);
+                  } else if (existingUser?.user?.token) {
+                    localStorage.setItem('token', existingUser.user.token);
+                  }
+                } catch (_) {}
               }
             } else {
               console.warn('❌ Failed to save Google user to backend:', errorData.message);
@@ -299,6 +371,14 @@ export function AuthProvider({ children }) {
             if (savedUser.user) {
               localStorage.setItem(`userProfile_${user.uid}`, JSON.stringify(savedUser.user));
             }
+            // Store token if present
+            try {
+              if (savedUser?.token) {
+                localStorage.setItem('token', savedUser.token);
+              } else if (savedUser?.user?.token) {
+                localStorage.setItem('token', savedUser.user.token);
+              }
+            } catch (_) {}
           }
         } else {
           // User exists, get their profile
@@ -333,10 +413,11 @@ export function AuthProvider({ children }) {
       const userProfile = {
         uid: user.uid,
         email: user.email,
-        displayName: user.displayName || user.email.split('@')[0],
+        name: user.displayName || user.email.split('@')[0],
         role: 'customer',
         profilePicture: user.photoURL,
         provider: 'google',
+        emailVerified: user.emailVerified,
         createdAt: new Date().toISOString()
       };
 
@@ -371,7 +452,25 @@ export function AuthProvider({ children }) {
   function getUserProfile() {
     if (!currentUser) return null;
     const profile = localStorage.getItem(`userProfile_${currentUser.uid}`);
-    return profile ? JSON.parse(profile) : null;
+    if (profile) {
+      return JSON.parse(profile);
+    }
+    
+    // If no profile in localStorage, create a basic one from Firebase user
+    const basicProfile = {
+      uid: currentUser.uid,
+      email: currentUser.email,
+      name: currentUser.displayName || currentUser.email?.split('@')[0] || 'User',
+      role: 'customer', // default role
+      profilePicture: currentUser.photoURL,
+      provider: currentUser.providerData?.[0]?.providerId || 'email',
+      emailVerified: currentUser.emailVerified,
+      createdAt: new Date().toISOString()
+    };
+    
+    // Store the basic profile for future use
+    localStorage.setItem(`userProfile_${currentUser.uid}`, JSON.stringify(basicProfile));
+    return basicProfile;
   }
 
   // Upgrade role to seller and persist seller fields in backend
@@ -408,6 +507,12 @@ export function AuthProvider({ children }) {
   // Update user profile
   async function updateUserProfile(updates) {
     if (!currentUser) return false;
+    
+    // Prevent admin profile updates
+    const profile = getUserProfile();
+    if (profile?.role === 'admin') {
+      throw new Error('Admin profiles cannot be updated');
+    }
     
     try {
       // Update Firebase profile if name or photo changed
@@ -474,6 +579,12 @@ export function AuthProvider({ children }) {
   // Change password function
   async function changePassword(currentPassword, newPassword) {
     if (!currentUser) throw new Error('No user logged in');
+    
+    // Prevent admin password changes
+    const profile = getUserProfile();
+    if (profile?.role === 'admin') {
+      throw new Error('Admin passwords cannot be changed');
+    }
     
     try {
       // Re-authenticate user first
@@ -667,13 +778,77 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log('Auth state changed:', user ? 'User logged in' : 'User logged out');
+      
+      if (user) {
+        // User is logged in - ensure profile exists
+        const existingProfile = localStorage.getItem(`userProfile_${user.uid}`);
+        if (!existingProfile) {
+          // Create a basic profile if none exists
+          const basicProfile = {
+            uid: user.uid,
+            email: user.email,
+            name: user.displayName || user.email?.split('@')[0] || 'User',
+            role: 'customer',
+            profilePicture: user.photoURL,
+            provider: user.providerData?.[0]?.providerId || 'email',
+            emailVerified: user.emailVerified,
+            createdAt: new Date().toISOString()
+          };
+          localStorage.setItem(`userProfile_${user.uid}`, JSON.stringify(basicProfile));
+        }
+      } else {
+        // User is logged out - clear all auth data
+        localStorage.removeItem('token');
+        localStorage.removeItem('remember_me');
+        // Clear all user profiles
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('userProfile_')) {
+            localStorage.removeItem(key);
+          }
+        });
+      }
+      
       setCurrentUser(user);
       setLoading(false);
     });
 
     return unsubscribe;
   }, []);
+
+  // Prevent unnecessary re-renders by memoizing the context value
+  const contextValue = React.useMemo(() => ({
+    currentUser,
+    loading,
+    signup,
+    login,
+    signInWithGoogle,
+    logout,
+    resetPassword,
+    changePassword,
+    getUserProfile,
+    updateUserProfile,
+    fetchUserProfile,
+    sendVerificationEmail,
+    needsEmailVerification,
+    reloadUser,
+    checkEmailAvailable,
+    validatePasswordLive,
+    validateAddressLive,
+    upgradeToSeller,
+    deleteAccount,
+    listBranchStores,
+    addBranchStore,
+    deleteBranchStore,
+    listBranchLinkRequests,
+    actOnBranchLinkRequest,
+    listNotifications,
+    markNotificationRead,
+    markAllNotificationsRead,
+    deleteNotification,
+    clearNotifications
+  }), [currentUser, loading]);
 
   // Real-time Firebase checks
   async function checkEmailAvailable(email) {
@@ -703,6 +878,7 @@ export function AuthProvider({ children }) {
 
   const value = {
     currentUser,
+    loading,
     signup,
     login,
     signInWithGoogle,
@@ -733,8 +909,8 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
+    <AuthContext.Provider value={contextValue}>
+      {children}
     </AuthContext.Provider>
   );
 }

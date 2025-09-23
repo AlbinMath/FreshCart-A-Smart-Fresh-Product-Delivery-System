@@ -18,7 +18,7 @@ function DeliveryRegister() {
   const [loading, setLoading] = useState(false);
   const [emailStatus, setEmailStatus] = useState("");
   const [passwordIssues, setPasswordIssues] = useState([]);
-  const { signup, checkEmailAvailable, validatePasswordLive } = useAuth();
+  const { signup, checkEmailAvailable, validatePasswordLive, logout } = useAuth();
   const navigate = useNavigate();
   
   // Use back button handler
@@ -65,12 +65,11 @@ function DeliveryRegister() {
       
       // Show success message
       setError("");
-      setMessage("Delivery account created successfully! Please check your email for verification.");
+      setMessage("Delivery account created! Please verify your email, then sign in.");
       
-      // Redirect to home page after a delay
-      setTimeout(() => {
-        navigate("/", { replace: true });
-      }, 3000);
+      // Enforce login before access
+      try { const { logout } = useAuth(); await logout(); } catch(_) {}
+      navigate("/login", { replace: true });
     } catch (error) {
       setError("Failed to create delivery agent account: " + error.message);
     }

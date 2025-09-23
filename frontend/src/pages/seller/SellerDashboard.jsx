@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import UpdateLicenseBanner from '../../components/UpdateLicenseBanner';
 import LicenseVerification from './LicenseVerification';
@@ -68,12 +68,7 @@ const SellerDashboard = () => {
 
   // If license is not approved or status is not yet loaded, show verification component
   if (!licenseStatus || licenseStatus !== 'approved') {
-    return (
-      <LicenseVerification 
-        onUpdateSuccess={handleLicenseUpdateSuccess} 
-        status={licenseStatus || 'inactive'} 
-      />
-    );
+    return <Navigate to="/seller/license-upload" replace />;
   }
 
 
@@ -159,10 +154,10 @@ const SellerDashboard = () => {
           <div className="px-4 py-4 bg-gray-50 text-right sm:px-6">
             <button
               type="button"
-              onClick={() => setShowLicenseBanner(true)}
+              onClick={() => navigate('/seller/license-upload')}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
-              Update License
+              {licenseStatus === 'approved' ? 'Update License' : 'Upload License'}
             </button>
           </div>
         </div>

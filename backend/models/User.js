@@ -112,6 +112,29 @@ const userSchema = new mongoose.Schema({
   emailVerificationExpires: {
     type: Date
   },
+  // Notification tracking
+  lastEmailVerificationNotification: {
+    type: Date,
+    default: null
+  },
+  notificationPreferences: {
+    email: {
+      type: Boolean,
+      default: true
+    },
+    push: {
+      type: Boolean,
+      default: true
+    },
+    licenseUpdates: {
+      type: Boolean,
+      default: true
+    },
+    emailVerificationReminders: {
+      type: Boolean,
+      default: true
+    }
+  },
   storeName: {
     type: String,
     trim: true
@@ -136,19 +159,24 @@ const userSchema = new mongoose.Schema({
     },
     // Optional external link to license document (when user submits URL only)
     externalLink: { type: String, default: '' },
-    status: { 
-      type: String, 
-      enum: ['pending', 'approved', 'rejected'], 
-      default: 'pending' 
+    // License expiry date
+    expiryDate: {
+      type: Date,
+      required: false
     },
-    rejectionReason: { 
-      type: String, 
-      default: '' 
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending'
     },
-    verifiedAt: { 
-      type: Date 
+    rejectionReason: {
+      type: String,
+      default: ''
     },
-    verifiedBy: { 
+    verifiedAt: {
+      type: Date
+    },
+    verifiedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
     }

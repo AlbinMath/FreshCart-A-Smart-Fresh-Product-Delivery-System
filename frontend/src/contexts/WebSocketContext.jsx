@@ -11,10 +11,19 @@ export const WebSocketProvider = ({ children }) => {
   const { currentUser } = useAuth();
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      // Disconnect socket if user is not logged in
+      if (socket) {
+        socket.disconnect();
+        setSocket(null);
+      }
+      return;
+    }
 
     // Initialize socket connection
-    const newSocket = io(import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000', {
+    const RAW = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').trim();
+    const WS_BASE = RAW.replace(/\/+$/, '').replace(/\/api$/i, '');
+    const newSocket = io(WS_BASE, {
       withCredentials: true,
       transports: ['websocket'],
     });
@@ -38,6 +47,12 @@ export const WebSocketProvider = ({ children }) => {
 
     newSocket.on('error', (error) => {
       console.error('WebSocket error:', error);
+    });
+
+    newSocket.on('auth_error', (error) => {
+      console.error('WebSocket auth error:', error);
+      // Disconnect on auth error
+      newSocket.disconnect();
     });
 
     setSocket(newSocket);

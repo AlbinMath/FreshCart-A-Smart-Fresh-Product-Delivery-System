@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, Outlet, useLocation } from "react-router-dom";
 import { FaBell, FaUsers, FaStore, FaUserTie, FaClock } from "react-icons/fa";
 
 function AdminDashboard() {
@@ -37,6 +37,9 @@ function AdminDashboard() {
   // Recent notifications state
   const [recentNotifications, setRecentNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [adminProfile, setAdminProfile] = useState(null);
+  const location = useLocation();
+  const isChildRoute = location.pathname !== '/admin' && location.pathname.startsWith('/admin/');
 
   useEffect(() => {
     if (!currentUser) {
@@ -52,22 +55,31 @@ function AdminDashboard() {
     }
 
     loadAdminData();
-  }, [currentUser, navigate]);
+    
+    // Load admin profile for display
+    setAdminProfile(profile);
+  }, [currentUser, navigate, getUserProfile]);
 
   const loadAdminData = async () => {
     try {
       setLoading(true);
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+      const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').trim().replace(/\/+$/, '');
+      const profile = getUserProfile() || {};
+      const token = localStorage.getItem('token');
+      const headers = { Accept: 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (profile.uid) headers['x-actor-uid'] = profile.uid;
+      if (profile.email) headers['x-actor-email'] = profile.email.toLowerCase();
       
       // Load users
-      const usersResponse = await fetch(`${API_BASE_URL}/admin/users`);
+      const usersResponse = await fetch(`${API_BASE_URL}/admin/users`, { headers });
       if (usersResponse.ok) {
         const usersData = await usersResponse.json();
         setUsers(usersData);
       }
 
       // Load stats
-      const statsResponse = await fetch(`${API_BASE_URL}/admin/stats`);
+      const statsResponse = await fetch(`${API_BASE_URL}/admin/stats`, { headers });
       if (statsResponse.ok) {
         const statsData = await statsResponse.json();
         // Add default wallet stats if not present
@@ -83,14 +95,14 @@ function AdminDashboard() {
       }
 
       // Load activity
-      const actRes = await fetch(`${API_BASE_URL}/admin/activity?limit=50`);
+      const actRes = await fetch(`${API_BASE_URL}/admin/activity?limit=50`, { headers });
       if (actRes.ok) {
         const logs = await actRes.json();
         setActivity(logs);
       }
 
       // Load stores (using the stores endpoint)
-      const storesResponse = await fetch(`${API_BASE_URL}/admin/stores`);
+      const storesResponse = await fetch(`${API_BASE_URL}/admin/stores`, { headers });
       if (storesResponse.ok) {
         const storesData = await storesResponse.json();
         setStores(storesData);
@@ -98,7 +110,7 @@ function AdminDashboard() {
 
       // Load sellers explicitly so Store Management (Sellers) is always populated
       try {
-        const sellersResponse = await fetch(`${API_BASE_URL}/admin/sellers`);
+        const sellersResponse = await fetch(`${API_BASE_URL}/admin/sellers`, { headers });
         if (sellersResponse.ok) {
           const sellersData = await sellersResponse.json();
           setSellers(sellersData);
@@ -109,7 +121,7 @@ function AdminDashboard() {
 
       // For products, use the admin endpoint that aggregates across sellers
       try {
-        const productsResponse = await fetch(`${API_BASE_URL}/admin/products`);
+        const productsResponse = await fetch(`${API_BASE_URL}/admin/products`, { headers });
         if (productsResponse.ok) {
           const productsData = await productsResponse.json();
           setProducts(productsData);
@@ -128,11 +140,16 @@ function AdminDashboard() {
   const handleUserAction = async (userId, action) => {
     try {
       const profile = getUserProfile() || {};
-      const response = await fetch(`http://localhost:5000/api/admin/users/${userId}/${action}`, {
+      const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').trim().replace(/\/+$/, '');
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (profile.uid) headers['x-actor-uid'] = profile.uid;
+      if (profile.email) headers['x-actor-email'] = profile.email.toLowerCase();
+
+      const response = await fetch(`${API_BASE_URL}/admin/users/${userId}/${action}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           adminEmail: profile.email || currentUser?.email
         })
@@ -157,11 +174,17 @@ function AdminDashboard() {
         return; // User cancelled
       }
 
-      const response = await fetch(`http://localhost:5000/api/admin/products/${sellerId}/${productId}/approval`, {
+      const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').trim().replace(/\/+$/, '');
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const profile = getUserProfile() || {};
+      if (profile.uid) headers['x-actor-uid'] = profile.uid;
+      if (profile.email) headers['x-actor-email'] = profile.email.toLowerCase();
+
+      const response = await fetch(`${API_BASE_URL}/admin/products/${sellerId}/${productId}/approval`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           action,
           rejectionReason
@@ -170,7 +193,11 @@ function AdminDashboard() {
 
       if (response.ok) {
         // Refresh products data
-        const productsResponse = await fetch("http://localhost:5000/api/admin/products");
+        const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').trim().replace(/\/+$/, '');
+        const token = localStorage.getItem('token');
+        const headers = { Accept: 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const prodRes = await fetch(`${API_BASE_URL}/admin/products`, { headers });
         if (productsResponse.ok) {
           const productsData = await productsResponse.json();
           setProducts(productsData);
@@ -197,12 +224,16 @@ function AdminDashboard() {
   const handleVerifyEmail = async (userId) => {
     try {
       const profile = getUserProfile() || {};
-      const response = await fetch(`http://localhost:5000/api/admin/users/${userId}/verify-email`, {
+      const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').trim().replace(/\/+$/, '');
+      const token = localStorage.getItem('token');
+      const headers = { Accept: 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (profile.uid) headers['x-actor-uid'] = profile.uid;
+      if (profile.email) headers['x-actor-email'] = profile.email.toLowerCase();
+
+      const response = await fetch(`${API_BASE_URL}/admin/users/${userId}/verify-email`, {
         method: "PUT",
-        headers: {
-          'x-actor-uid': profile.uid || '',
-          'x-actor-email': (profile.email || '').toLowerCase()
-        }
+        headers
       });
 
       if (response.ok) {
@@ -216,13 +247,16 @@ function AdminDashboard() {
   const handleVerifyRole = async (userId, role, verified) => {
     try {
       const profile = getUserProfile() || {};
-      const response = await fetch(`http://localhost:5000/api/admin/users/${userId}/verify-role`, {
+      const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').trim().replace(/\/+$/, '');
+      const token = localStorage.getItem('token');
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (profile.uid) headers['x-actor-uid'] = profile.uid;
+      if (profile.email) headers['x-actor-email'] = profile.email.toLowerCase();
+
+      const response = await fetch(`${API_BASE_URL}/admin/users/${userId}/verify-role`, {
         method: "PUT",
-        headers: { 
-          "Content-Type": "application/json",
-          'x-actor-uid': profile.uid || '',
-          'x-actor-email': (profile.email || '').toLowerCase()
-        },
+        headers,
         body: JSON.stringify({ role, verified })
       });
       if (response.ok) {
@@ -237,7 +271,14 @@ function AdminDashboard() {
   useEffect(() => {
     const loadNotifications = async () => {
       try {
-        const response = await fetch("http://localhost:5000/api/admin/notifications?limit=5");
+        const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').trim().replace(/\/+$/, '');
+        const token = localStorage.getItem('token');
+        const prof = getUserProfile() || {};
+        const headers = { Accept: 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (prof.uid) headers['x-actor-uid'] = prof.uid;
+        if (prof.email) headers['x-actor-email'] = prof.email.toLowerCase();
+        const response = await fetch(`${API_BASE_URL}/admin/notifications?limit=5`, { headers });
         if (response.ok) {
           const data = await response.json();
           setRecentNotifications(data.notifications || []);
@@ -264,145 +305,161 @@ function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 overflow-x-hidden">
-          {/* Header */}
-          <header className="bg-white shadow-sm sticky top-0 z-10">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex justify-between h-16 items-center">
-                <div className="flex-shrink-0 flex items-center">
-                  <h1 className="text-xl font-bold text-gray-900">Admin Dashboard</h1>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <button
-                    onClick={() => setShowNotifications(!showNotifications)}
-                    className="p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative"
-                    title="Notifications"
-                  >
-                    <FaBell className="h-5 w-5" />
-                    {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                        {unreadCount > 9 ? '9+' : unreadCount}
-                      </span>
-                    )}
-                  </button>
-                  <div className="relative ml-3">
-                    <button
-                      onClick={() => setShowLogoutConfirm(true)}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-                    >
-                      Logout
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </header>
-
+    <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar - left navigation */}
-      <aside className="fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-gray-200 flex flex-col z-30 pt-16">
-          <div className="px-4 py-5 border-b">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-green-600 text-white flex items-center justify-center font-bold">FC</div>
-              <div>
-                <div className="text-lg font-semibold text-green-700">Fresh Cart</div>
-                <div className="text-xs text-gray-500">Welcome back, <span className="font-medium">Admin</span></div>
-              </div>
-              <span className="ml-auto text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Admin</span>
+      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shadow-lg">
+        {/* Sidebar Header */}
+        <div className="px-6 py-5 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-green-600 text-white flex items-center justify-center font-bold text-lg">FC</div>
+            <div>
+              <div className="text-lg font-semibold text-green-700">FreshCart</div>
+              <div className="text-xs text-gray-500">Admin Dashboard</div>
             </div>
           </div>
+        </div>
 
-          <nav className="flex-1 overflow-y-auto px-2 py-4 space-y-1">
-            {[
-              { key: 'overview', label: 'Overview', icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-              )},
-              { key: 'user-management', label: 'User Management', icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5V4H2v16h5m10 0V10m0 10H7m10-10H7"/></svg>
-              )},
-              { key: 'product-approval', label: 'Product Approval' , icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-              )},
-              { key: 'orders', label: 'Order Monitoring', icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h18M9 7h12M9 11h12M9 15h12M9 19h12M3 7h.01M3 11h.01M3 15h.01M3 19h.01"/></svg>
-              )},
-              { key: 'store-managing', label: 'Store Management (Sellers)', icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7l1 1h16l1-1m-2 0v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7m3 10h8"/></svg>
-              )},
-              { key: 'analytics', label: 'Platform Analytics', icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 3v18M6 8v13M16 13v8M21 6v15"/></svg>
-              )},
-              { key: 'activity', label: 'Activity Log', icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-              )},
-              { key: 'delivery-analytics', label: 'Delivery Analytics', icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 13h2l2 3h6l2-4 3 5h3"/></svg>
-              )},
-              { key: 'platform-settings', label: 'Platform Settings', icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8 4a8 8 0 11-16 0 8 8 0 0116 0z"/></svg>
-              )},
-              { key: 'reports', label: 'Reports', icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-6h13M9 7h12M9 11h12M9 15h12M3 7h.01M3 11h.01M3 15h.01M3 19h.01"/></svg>
-              )},
-              { key: 'wallet', label: 'My Wallet', icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              )}
-            ].map(item => (
-              <button
-                key={item.key}
-                onClick={() => setActiveTab(item.key)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${activeTab === item.key ? 'bg-green-100 text-green-700' : 'text-gray-700 hover:bg-gray-50'}`}
-              >
-                <span className="text-gray-500">{item.icon}</span>
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.badge ? <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">{item.badge}</span> : null}
-              </button>
-            ))}
-          </nav>
-
-          <div className="mt-auto border-t p-3 space-y-2">
-            {showDevUI && (
-              <button href='/admin/notifications' className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-50">
-                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-                <span>Notifications</span>
-                <span className="ml-auto text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">{showNotifications ? 'Hide' : 'Show'}</span>
-              </button>
+        {/* Navigation Menu */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+          {[
+            { key: 'overview', label: 'Overview', icon: (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+            )},
+            { key: 'user-management', label: 'User Management', icon: (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5V4H2v16h5m10 0V10m0 10H7m10-10H7"/></svg>
+            )},
+            { key: 'product-approval', label: 'Product Approval' , icon: (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            )},
+            { key: 'orders', label: 'Order Monitoring', icon: (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h18M9 7h12M9 11h12M9 15h12M9 19h12M3 7h.01M3 11h.01M3 15h.01M3 19h.01"/></svg>
+            )},
+            { key: 'store-managing', label: 'Store Management', icon: (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7l1 1h16l1-1m-2 0v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7m3 10h8"/></svg>
+            )},
+            { key: 'analytics', label: 'Platform Analytics', icon: (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 3v18M6 8v13M16 13v8M21 6v15"/></svg>
+            )},
+            { key: 'activity', label: 'Activity Log', icon: (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            )},
+            { key: 'delivery-analytics', label: 'Delivery Analytics', icon: (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 13h2l2 3h6l2-4 3 5h3"/></svg>
+            )},
+            { key: 'platform-settings', label: 'Platform Settings', icon: (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8 4a8 8 0 11-16 0 8 8 0 0116 0z"/></svg>
+            )},
+            { key: 'reports', label: 'Reports', icon: (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-6h13M9 7h12M9 11h12M9 15h12M3 7h.01M3 11h.01M3 15h.01M3 19h.01"/></svg>
+            )},
+            { key: 'wallet', label: 'My Wallet', icon: (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
             )}
-            <button onClick={() => setShowLogoutConfirm(true)} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 11-6 0v-1"/></svg>
-              <span>Logout</span>
+          ].map(item => (
+            <button
+              key={item.key}
+              onClick={() => setActiveTab(item.key)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === item.key 
+                  ? 'bg-green-100 text-green-700 border-r-2 border-green-500' 
+                  : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <span className="text-gray-500">{item.icon}</span>
+              <span className="flex-1 text-left">{item.label}</span>
             </button>
-          </div>
-        </aside>
+          ))}
+        </nav>
 
-        {/* Main content area, shifted right for sidebar */}
-        <div className="ml-64 pt-16 min-h-screen bg-gray-50 relative z-0">
-          <div className="border-b bg-white">
-            <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+        {/* Sidebar Footer */}
+        <div className="border-t border-gray-200 p-4">
+          <button 
+            onClick={() => setShowLogoutConfirm(true)} 
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 11-6 0v-1"/>
+            </svg>
+            <span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Top Header */}
+        <header className="bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Admin</h1>
-                <p className="text-sm text-gray-600">Welcome back</p>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  {activeTab === 'overview' && 'Dashboard Overview'}
+                  {activeTab === 'user-management' && 'User Management'}
+                  {activeTab === 'product-approval' && 'Product Approval'}
+                  {activeTab === 'orders' && 'Order Monitoring'}
+                  {activeTab === 'store-managing' && 'Store Management'}
+                  {activeTab === 'analytics' && 'Platform Analytics'}
+                  {activeTab === 'activity' && 'Activity Log'}
+                  {activeTab === 'delivery-analytics' && 'Delivery Analytics'}
+                  {activeTab === 'platform-settings' && 'Platform Settings'}
+                  {activeTab === 'reports' && 'Reports'}
+                  {activeTab === 'wallet' && 'My Wallet'}
+                </h1>
+                <p className="text-sm text-gray-600 mt-1">
+                  {activeTab === 'overview' && 'Welcome back, Admin. Here\'s what\'s happening with your platform.'}
+                  {activeTab === 'user-management' && 'Manage user accounts, roles, and permissions.'}
+                  {activeTab === 'product-approval' && 'Review and approve product listings.'}
+                  {activeTab === 'orders' && 'Monitor and manage platform orders.'}
+                  {activeTab === 'store-managing' && 'Manage seller stores and their settings.'}
+                  {activeTab === 'analytics' && 'View platform performance and user analytics.'}
+                  {activeTab === 'activity' && 'Monitor system activity and user actions.'}
+                  {activeTab === 'delivery-analytics' && 'Track delivery performance and metrics.'}
+                  {activeTab === 'platform-settings' && 'Configure platform settings and preferences.'}
+                  {activeTab === 'reports' && 'Generate and view platform reports.'}
+                  {activeTab === 'wallet' && 'Manage your admin wallet and transactions.'}
+                </p>
               </div>
-              <div className="relative">
-                {showDevUI && (
-                  <button onClick={() => setShowNotifications(true)} className="relative mr-3 p-2 rounded-full hover:bg-gray-100" title="Notifications">
-                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1"/></svg>
-                    <span className="absolute -top-1 -right-1 text-[10px] bg-red-600 text-white px-1.5 rounded-full">3</span>
-                  </button>
-                )}
-                <button onClick={() => setShowLogoutConfirm(true)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 text-sm">Logout</button>
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative"
+                  title="Notifications"
+                >
+                  <FaBell className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-full bg-green-600 text-white flex items-center justify-center text-sm font-medium">
+                    A
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">Admin</span>
+                </div>
               </div>
             </div>
           </div>
+        </header>
 
-          {/* Stats Cards */}
-          <div className="max-w-7xl mx-auto px-6 py-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Wallet Balance */}
-            <Link to="/admin/wallet" className="block">
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow duration-200 h-full">
-                <div className="flex items-center">
-                  <div className="p-3 rounded-full bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300">
+        {/* Main Content */}
+        <div role="main" className="flex-1 overflow-y-auto">
+          {isChildRoute ? (
+            <div className="max-w-7xl mx-auto px-6 py-6">
+              <Outlet />
+            </div>
+          ) : (
+          <div className="max-w-7xl mx-auto px-6 py-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              {/* Wallet Balance */}
+              <Link to="/admin/wallet" className="block">
+                <div className="bg-white rounded-lg shadow-lg p-6 border border-green-100 hover:shadow-xl hover:-translate-y-1 hover:ring-1 hover:ring-green-200 transition-all duration-200 h-full">
+                  <div className="flex items-center">
+                    <div className="p-3 rounded-full bg-purple-100 text-purple-600">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
@@ -425,7 +482,7 @@ function AdminDashboard() {
             {/* Total Users */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
             <div className="flex items-center">
-              <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300">
+              <div className="p-3 rounded-full bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
                 </svg>
@@ -453,7 +510,7 @@ function AdminDashboard() {
 
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
             <div className="flex items-center">
-              <div className="p-3 rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-300">
+              <div className="p-3 rounded-full bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -467,7 +524,7 @@ function AdminDashboard() {
 
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
             <div className="flex items-center">
-              <div className="p-3 rounded-full bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300">
+              <div className="p-3 rounded-full bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
@@ -481,7 +538,7 @@ function AdminDashboard() {
 
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
             <div className="flex items-center">
-              <div className="p-3 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300">
+              <div className="p-3 rounded-full bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                 </svg>
@@ -492,14 +549,96 @@ function AdminDashboard() {
               </div>
             </div>
           </div>
-        </div>
+            </div>
+            </div>
+          
+                    )}
 
-        {/* Main content cards below metrics (dev only) */}
-        {showDevUI && (
-          <div className="max-w-7xl mx-auto px-6 pb-10">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left: Pending Product Approvals */}
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
+            {/* Tab Content */}
+            {/* Overview Tab */}
+            {(activeTab === "overview" || activeTab === "analytics") && (
+              <div className="space-y-6">
+                {/* Admin Profile Display */}
+                {adminProfile && (
+                  <div className="bg-white rounded-lg border p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Admin Profile</h3>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        Read Only
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Name</label>
+                        <p className="text-gray-900">{adminProfile.name || 'Not set'}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Email</label>
+                        <p className="text-gray-900">{currentUser?.email || 'Not set'}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Role</label>
+                        <p className="text-gray-900 capitalize">{adminProfile.role || 'Admin'}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-500 mb-1">Admin Level</label>
+                        <p className="text-gray-900 capitalize">{adminProfile.adminLevel || 'Super Admin'}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="text-sm text-yellow-800">
+                        <strong>Note:</strong> Admin profiles are read-only and cannot be edited for security reasons.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-gray-50 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
+                    <div className="space-y-3">
+                      <div className="flex items-center text-sm text-gray-600">
+                        <div className="w-2 h-2 bg-green-400 rounded-full mr-3"></div>
+                        <span>New user registration: </span>
+                        <span className="ml-auto text-xs"> ago</span>
+                      </div>
+                      <div className="flex items-center text-sm text-gray-600">
+                        <div className="w-2 h-2 bg-blue-400 rounded-full mr-3"></div>
+                        <span>Store verification completed: </span>
+                        <span className="ml-auto text-xs"> ago</span>
+                      </div>
+                      <div className="flex items-center text-sm text-gray-600">
+                        <div className="w-2 h-2 bg-yellow-400 rounded-full mr-3"></div>
+                        <span>Email verification pending: </span>
+                        <span className="ml-auto text-xs"> ago</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+                    <div className="space-y-3">
+                      <button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg text-sm font-medium">
+                        Verify Pending Users
+                      </button>
+                      <button className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg text-sm font-medium">
+                        Generate System Report
+                      </button>
+                      <button className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg text-sm font-medium">
+                        Manage System Settings
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Dev UI Content */}
+            {showDevUI && (
+              <div className="mt-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left: Pending Product Approvals */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-gray-900">Pending Product Approvals</h3>
                   <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full"></span>
@@ -526,6 +665,11 @@ function AdminDashboard() {
             </div>
           </div>
         )}
+          
+
+          
+          
+        
 
         {/* Notifications Modal */}
         {showNotifications && (
@@ -635,50 +779,6 @@ function AdminDashboard() {
           </div>
         )}
 
-        {/* Keep existing tab sections for deeper pages */}
-        <div className="ml-64 px-6">
-            {/* Overview Tab */}
-            {(activeTab === "overview" || activeTab === "analytics") && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-gray-50 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center text-sm text-gray-600">
-                        <div className="w-2 h-2 bg-green-400 rounded-full mr-3"></div>
-                        <span>New user registration: </span>
-                        <span className="ml-auto text-xs"> ago</span>
-                      </div>
-                      <div className="flex items-center text-sm text-gray-600">
-                        <div className="w-2 h-2 bg-blue-400 rounded-full mr-3"></div>
-                        <span>Store verification completed: </span>
-                        <span className="ml-auto text-xs"> ago</span>
-                      </div>
-                      <div className="flex items-center text-sm text-gray-600">
-                        <div className="w-2 h-2 bg-yellow-400 rounded-full mr-3"></div>
-                        <span>Email verification pending: </span>
-                        <span className="ml-auto text-xs"> ago</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-gray-50 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
-                    <div className="space-y-3">
-                      <button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg text-sm font-medium">
-                        Verify Pending Users
-                      </button>
-                      <button className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg text-sm font-medium">
-                        Generate System Report
-                      </button>
-                      <button className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg text-sm font-medium">
-                        Manage System Settings
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Users Tab */}
             {(activeTab === "users" || activeTab === "user-management") && (
@@ -869,21 +969,28 @@ function AdminDashboard() {
                             ) : null}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
+                            <div className="flex items-center space-x-2">
+                              {/* Verification status badge */}
+                              {(() => {
+                                const v = seller.verificationStatus || seller.licenseInfo?.status || 'pending';
+                                if (v === 'approved') return (<span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">Approved</span>);
+                                if (v === 'rejected') return (<span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700">Rejected</span>);
+                                // pending
+                                const hasLicense = Boolean(seller.licenseInfo?.file?.url || seller.licenseInfo?.externalLink);
+                                return (<span className="px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-700">{hasLicense ? 'Verification Pending' : 'Not Updated'}</span>);
+                              })()}
+                              <button
+                                onClick={() => navigate(`/admin/sellers/${seller._id}/verify`)}
+                                className="text-indigo-600 hover:text-indigo-800"
+                              >
+                                Verify Seller
+                              </button>
                               {!seller.emailVerified && (
                                 <button
                                   onClick={() => handleVerifyEmail(seller._id)}
                                   className="text-blue-600 hover:text-blue-900"
                                 >
                                   Verify Email
-                                </button>
-                              )}
-                              {seller.accountStatus !== 'active' && (
-                                <button
-                                  onClick={() => handleVerifyRole(seller._id, seller.role, true)}
-                                  className="text-green-600 hover:text-green-800"
-                                >
-                                  Verify Seller
                                 </button>
                               )}
                               <button
@@ -930,7 +1037,11 @@ function AdminDashboard() {
                           try {
                             setLoading(true);
                             const q = r === 'all' ? '' : `&role=${r}`;
-                            const res = await fetch(`http://localhost:5000/api/admin/activity?limit=50${q}`);
+                            const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').trim().replace(/\/+$/, '');
+                            const token = localStorage.getItem('token');
+                            const headers = { Accept: 'application/json' };
+                            if (token) headers['Authorization'] = `Bearer ${token}`;
+                            const res = await fetch(`${API_BASE_URL}/admin/activity?limit=50${q}` , { headers });
                             if (res.ok) {
                               const logs = await res.json();
                               setActivity(logs);
@@ -1592,7 +1703,11 @@ function AdminDashboard() {
                     <h4 className="font-semibold mb-3">User Reports</h4>
                     <div className="space-y-2 text-sm text-gray-700">
                       <button className="w-full text-left px-3 py-2 rounded border hover:bg-gray-50" onClick={async () => {
-                        const res = await fetch('http://localhost:5000/api/admin/users');
+                        const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').trim().replace(/\/+$/, '');
+                        const token = localStorage.getItem('token');
+                        const headers = { Accept: 'application/json' };
+                        if (token) headers['Authorization'] = `Bearer ${token}`;
+                        const res = await fetch(`${API_BASE_URL}/admin/users`, { headers });
                         if (!res.ok) return;
                         const data = await res.json();
                         const csv = ['Name,Email,Role,Active,Email Verified,Created At']
@@ -1610,7 +1725,11 @@ function AdminDashboard() {
                     <h4 className="font-semibold mb-3">Admin Activity Reports</h4>
                     <div className="space-y-2 text-sm text-gray-700">
                       <button className="w-full text-left px-3 py-2 rounded border hover:bg-gray-50" onClick={async () => {
-                        const res = await fetch('http://localhost:5000/api/admin/activity?limit=200');
+                        const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').trim().replace(/\/+$/, '');
+                        const token = localStorage.getItem('token');
+                        const headers = { Accept: 'application/json' };
+                        if (token) headers['Authorization'] = `Bearer ${token}`;
+                        const res = await fetch(`${API_BASE_URL}/admin/activity?limit=200`, { headers });
                         if (!res.ok) return;
                         const data = await res.json();
                         const csv = ['When,Action,Actor Role,Actor Email,Target User']
@@ -1625,12 +1744,18 @@ function AdminDashboard() {
                   </div>
                 </div>
               </div>
+              
             )}
           </div>
-        </div>
-      </div>
-    
-  );
+          
+          
+        
+        
+
+       </div>
+     </div>
+   
+ );
 }
 
 // StatCard component for dashboard statistics
@@ -1665,10 +1790,8 @@ function StatCard({ title, value, icon, trend, trendValue, link }) {
         </div>
       )}
     </div>
-  );
+  );}
 
-  return link ? <Link to={link}>{content}</Link> : content;
-}
 
-export default AdminDashboard;
 
+export default AdminDashboard; 

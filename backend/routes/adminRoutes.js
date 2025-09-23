@@ -5,31 +5,65 @@ import Activity from '../models/Activity.js';
 import { logActivity } from '../middleware/activityLogger.js';
 import ProductApprovalService from '../services/productApprovalService.js';
 import Notification from '../models/Notification.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Middleware to check if user is admin
-const requireAdmin = async (req, res, next) => {
+// Try authenticate if Authorization header is present; otherwise continue
+const tryAuth = async (req, res, next) => {
   try {
-    const { uid } = req.params;
-    const user = await User.findOne({ uid });
-    
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. Admin privileges required.'
-      });
+    const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+    if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+      return authenticateToken(req, res, next);
     }
-    
-    next();
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: error.message
-    });
+    return next();
+  } catch (e) {
+    return next();
   }
 };
+
+// Require admin (token optional). If no token, identify by headers: x-actor-email or x-actor-uid
+const requireAdmin = [
+  tryAuth,
+  async (req, res, next) => {
+    try {
+      let userDoc = null;
+
+      if (req.user) {
+        userDoc = req.user.id
+          ? await User.findById(req.user.id).select('_id role email uid')
+          : await User.findOne({ uid: req.user.uid }).select('_id role email uid');
+      } else {
+        const actorUid = req.headers['x-actor-uid'];
+        const actorEmail = (req.headers['x-actor-email'] || '').toString().toLowerCase();
+        if (actorUid) {
+          userDoc = await User.findOne({ uid: actorUid }).select('_id role email uid');
+        } else if (actorEmail) {
+          userDoc = await User.findOne({ email: actorEmail }).select('_id role email uid');
+        }
+      }
+
+      if (!userDoc || userDoc.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Access denied. Admin privileges required.' });
+      }
+
+      // Normalize req.user for downstream handlers
+      req.user = req.user || {};
+      req.user.id = userDoc._id.toString();
+      req.user.role = 'admin';
+      req.user.email = req.user.email || userDoc.email;
+      req.user.uid = req.user.uid || userDoc.uid;
+
+      return next();
+    } catch (e) {
+      console.error('requireAdmin error:', e);
+      return res.status(500).json({ success: false, message: 'Authentication error' });
+    }
+  }
+];
+
+// Apply admin guard to all routes below
+router.use(requireAdmin);
 
 // Get all users (admin only)
 router.get('/users', async (req, res) => {
@@ -114,6 +148,87 @@ router.get('/sellers', async (req, res) => {
       message: 'Internal server error',
       error: error.message
     });
+  }
+});
+
+// Get single seller by id (admin only)
+router.get('/sellers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid seller id' });
+    }
+    const seller = await User.findById(id).select('-password');
+    if (!seller || seller.role !== 'seller') {
+      return res.status(404).json({ success: false, message: 'Seller not found' });
+    }
+    res.json({ success: true, seller });
+  } catch (error) {
+    console.error('Seller fetch error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+  }
+});
+
+// Approve seller verification
+router.patch('/sellers/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid seller id' });
+    }
+    const seller = await User.findById(id);
+    if (!seller || seller.role !== 'seller') {
+      return res.status(404).json({ success: false, message: 'Seller not found' });
+    }
+    seller.isVerified = true;
+    seller.verificationStatus = 'approved';
+    // Also reflect in licenseInfo when present
+    if (seller.licenseInfo) {
+      seller.licenseInfo.status = 'approved';
+      seller.licenseInfo.verifiedAt = new Date();
+      seller.licenseInfo.verifiedBy = req.user?.id || seller.licenseInfo.verifiedBy;
+      seller.licenseInfo.rejectionReason = '';
+    }
+    await seller.save();
+    const sanitized = seller.toObject();
+    delete sanitized.password;
+    res.json({ success: true, message: 'Seller verification approved', seller: sanitized });
+  } catch (error) {
+    console.error('Approve seller error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+  }
+});
+
+// Reject seller verification
+router.patch('/sellers/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body || {};
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid seller id' });
+    }
+    if (!reason || !String(reason).trim()) {
+      return res.status(400).json({ success: false, message: 'Rejection reason is required' });
+    }
+    const seller = await User.findById(id);
+    if (!seller || seller.role !== 'seller') {
+      return res.status(404).json({ success: false, message: 'Seller not found' });
+    }
+    seller.isVerified = false;
+    seller.verificationStatus = 'rejected';
+    if (seller.licenseInfo) {
+      seller.licenseInfo.status = 'rejected';
+      seller.licenseInfo.verifiedAt = new Date();
+      seller.licenseInfo.verifiedBy = req.user?.id || seller.licenseInfo.verifiedBy;
+      seller.licenseInfo.rejectionReason = String(reason).trim();
+    }
+    await seller.save();
+    const sanitized = seller.toObject();
+    delete sanitized.password;
+    res.json({ success: true, message: 'Seller verification rejected', seller: sanitized });
+  } catch (error) {
+    console.error('Reject seller error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
   }
 });
 

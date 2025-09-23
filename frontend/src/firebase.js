@@ -31,13 +31,14 @@ googleProvider.setCustomParameters({
 // Firestore database
 export const db = getFirestore(app);
 
-// Initialize Analytics (only in browser where supported)
+// Initialize Analytics (only in browser where supported and measurementId is available)
 try {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
     getAnalytics(app);
   }
 } catch (e) {
-  // Analytics may fail in non-browser environments; ignore safely
+  // Analytics may fail in non-browser environments or with invalid config; ignore safely
+  console.warn('Firebase Analytics initialization failed:', e.message);
 }
 
 export default app;

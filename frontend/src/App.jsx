@@ -2,8 +2,11 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { WebSocketProvider } from "./contexts/WebSocketContext";
+import { NotificationProvider } from "./contexts/NotificationContext";
+
 import { useAuth } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import SellerLicenseGate from "./components/SellerLicenseGate";
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -37,7 +40,10 @@ import SellerNotifications from "./pages/SellerNotifications";
 import SellerProducts from "./pages/SellerProducts";
 import SellerStoreSettings from "./pages/SellerStoreSettings";
 import SellerSchedule from "./pages/SellerSchedule";
+import SellerLicenseUpload from "./pages/SellerLicenseUpload";
+import LicenseVerification from "./pages/admin/LicenseVerification";
 import Wallet from "./pages/Wallet";
+import AdminSellerLicense from "./pages/admin/AdminSellerLicense";
 
 // Role-aware landing: send users to appropriate dashboards
 function HomeLanding() {
@@ -45,6 +51,9 @@ function HomeLanding() {
   const profile = getUserProfile();
   if (profile && ["store", "seller"].includes(profile.role)) {
     return <Navigate to="/seller" replace />;
+  }
+  if (profile && profile.role === "delivery") {
+    return <Navigate to="/delivery" replace />;
   }
   if (profile && profile.role === "admin") {
     return <Navigate to="/admin" replace />;
@@ -57,9 +66,24 @@ function App() {
     <Router>
       <AuthProvider>
         <WebSocketProvider>
-          <div className="min-h-screen bg-gray-50">
-            <Navbar />
-            <main className="container mx-auto px-4 py-8">
+          <NotificationProvider>
+            <AppContent />
+          </NotificationProvider>
+        </WebSocketProvider>
+      </AuthProvider>
+    </Router>
+  );
+}
+
+function AppContent() {
+  const { getUserProfile } = useAuth();
+  const profile = getUserProfile();
+  const isAdmin = profile?.role === 'admin';
+  
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {!isAdmin && <Navbar />}
+      <main className={isAdmin ? "" : "container mx-auto px-4 py-8"}>
               <Routes>
                 <Route path="/" element={<HomeLanding />} />
                 <Route path="/login" element={<Login />} />
@@ -103,7 +127,7 @@ function App() {
                 <Route
                   path="/admin/*"
                   element={
-                    <ProtectedRoute requiredRole="admin">
+                    <ProtectedRoute allowedRoles={["admin"]}>
                       <AdminDashboard />
                     </ProtectedRoute>
                   }
@@ -111,11 +135,14 @@ function App() {
                   <Route index element={<AdminWallet />} />
                   <Route path="wallet" element={<AdminWallet />} />
                   <Route path="notifications" element={<AdminNotifications />} />
+                  <Route path="license-verification" element={<LicenseVerification />} />
+                  <Route path="sellers/:sellerId/license" element={<AdminSellerLicense />} />
+                  <Route path="sellers/:sellerId/verify" element={<AdminSellerLicense />} />
                 </Route>
                 <Route 
                   path="/delivery" 
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={["delivery"]}>
                       <DeliveryDashboard />
                     </ProtectedRoute>
                   } 
@@ -123,7 +150,7 @@ function App() {
                 <Route 
                   path="/delivery/profile" 
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={["delivery"]}>
                       <DeliveryProfile />
                     </ProtectedRoute>
                   } 
@@ -131,7 +158,7 @@ function App() {
                 <Route 
                   path="/delivery/notifications" 
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={["delivery"]}>
                       <DeliveryNotifications />
                     </ProtectedRoute>
                   } 
@@ -139,7 +166,7 @@ function App() {
                 <Route 
                   path="/delivery/schedule" 
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={["delivery"]}>
                       <DeliverySchedule />
                     </ProtectedRoute>
                   } 
@@ -148,7 +175,9 @@ function App() {
                   path="/seller" 
                   element={
                     <ProtectedRoute allowedRoles={["store", "seller"]}>
-                      <SellerDashboard />
+                      <SellerLicenseGate>
+                        <SellerDashboard />
+                      </SellerLicenseGate>
                     </ProtectedRoute>
                   }
                 />
@@ -156,7 +185,9 @@ function App() {
                   path="/seller/bank" 
                   element={
                     <ProtectedRoute allowedRoles={["store", "seller"]}>
-                      <SellerBankDetails />
+                      <SellerLicenseGate>
+                        <SellerBankDetails />
+                      </SellerLicenseGate>
                     </ProtectedRoute>
                   }
                 />
@@ -164,7 +195,9 @@ function App() {
                   path="/seller/profile" 
                   element={
                     <ProtectedRoute allowedRoles={["store", "seller"]}>
-                      <SellerProfile />
+                      <SellerLicenseGate>
+                        <SellerProfile />
+                      </SellerLicenseGate>
                     </ProtectedRoute>
                   }
                 />
@@ -172,7 +205,9 @@ function App() {
                   path="/seller/notifications" 
                   element={
                     <ProtectedRoute allowedRoles={["store", "seller"]}>
-                      <SellerNotifications />
+                      <SellerLicenseGate>
+                        <SellerNotifications />
+                      </SellerLicenseGate>
                     </ProtectedRoute>
                   }
                 />
@@ -180,7 +215,9 @@ function App() {
                   path="/seller/products" 
                   element={
                     <ProtectedRoute allowedRoles={["store", "seller"]}>
-                      <SellerProducts />
+                      <SellerLicenseGate>
+                        <SellerProducts />
+                      </SellerLicenseGate>
                     </ProtectedRoute>
                   }
                 />
@@ -188,7 +225,9 @@ function App() {
                   path="/seller/settings" 
                   element={
                     <ProtectedRoute allowedRoles={["store", "seller"]}>
-                      <SellerStoreSettings />
+                      <SellerLicenseGate>
+                        <SellerStoreSettings />
+                      </SellerLicenseGate>
                     </ProtectedRoute>
                   }
                 />
@@ -196,14 +235,24 @@ function App() {
                   path="/seller/schedule" 
                   element={
                     <ProtectedRoute allowedRoles={["store", "seller"]}>
-                      <SellerSchedule />
+                      <SellerLicenseGate>
+                        <SellerSchedule />
+                      </SellerLicenseGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route 
+                  path="/seller/license-upload" 
+                  element={
+                    <ProtectedRoute allowedRoles={["store", "seller"]}>
+                      <SellerLicenseUpload />
                     </ProtectedRoute>
                   }
                 />
                 <Route 
                   path="/wallet" 
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={["customer", "store", "seller", "delivery", "admin"]}>
                       <Wallet />
                     </ProtectedRoute>
                   }
@@ -212,7 +261,9 @@ function App() {
                   path="/BranchLinkRequest" 
                   element={
                     <ProtectedRoute allowedRoles={["store", "seller"]}>
-                      <BranchLinkRequest />
+                      <SellerLicenseGate>
+                        <BranchLinkRequest />
+                      </SellerLicenseGate>
                     </ProtectedRoute>
                   }
                 />
@@ -220,11 +271,8 @@ function App() {
                 {/* Add a catch-all route for 404 pages */}
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
-            </main>
-          </div>
-        </WebSocketProvider>
-      </AuthProvider>
-    </Router>
+      </main>
+    </div>
   );
 }
 

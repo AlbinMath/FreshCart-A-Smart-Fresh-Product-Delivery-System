@@ -38,10 +38,10 @@ export const validateProfileData = (profileData, userRole) => {
       errors.push("Store name must be at least 2 characters long");
     }
     if (profileData.businessLicense) {
-      // Lowercase 2 letters + 6 digits (e.g., ss100001)
-      const businessLicensePattern = /^[a-z]{2}\d{6}$/;
+      // Case-insensitive 2 letters + 6 digits (e.g., AB123456)
+      const businessLicensePattern = /^[a-zA-Z]{2}\d{6}$/;
       if (!businessLicensePattern.test(profileData.businessLicense.trim())) {
-        errors.push("Business license must be in format: 2 letters followed by 6 digits (e.g., ss100001)");
+        errors.push("Business license must be in format: 2 letters followed by 6 digits (e.g., AB123456)");
       }
     }
     if (profileData.storeAddress && profileData.storeAddress.trim().length < 10) {
@@ -146,13 +146,13 @@ export const validateBusinessLicense = (license) => {
   if (!license) return { isValid: true, message: '' };
   
   const trimmed = license.trim();
-  // Enforce lowercase 2 letters + 6 digits
-  const pattern = /^[a-z]{2}\d{6}$/;
+  // Case-insensitive 2 letters + 6 digits (matching backend validation)
+  const pattern = /^[a-zA-Z]{2}\d{6}$/;
   
   if (!pattern.test(trimmed)) {
     return {
       isValid: false,
-      message: 'Format: ss + 6 digits (e.g., ss100001)'
+      message: 'Format: 2 letters + 6 digits (e.g., AB123456)'
     };
   }
   

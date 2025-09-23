@@ -23,7 +23,7 @@ function StoreRegister() {
   const [emailStatus, setEmailStatus] = useState(""); // '', 'checking', 'available', 'taken'
   const [passwordIssues, setPasswordIssues] = useState([]);
   const [businessLicenseValidation, setBusinessLicenseValidation] = useState({ isValid: true, message: '' });
-  const { signup, login, checkEmailAvailable, validatePasswordLive, currentUser, updateUserProfile, upgradeToSeller } = useAuth();
+  const { signup, login, checkEmailAvailable, validatePasswordLive, currentUser, updateUserProfile, upgradeToSeller, logout } = useAuth();
   const navigate = useNavigate();
   
   // Use back button handler
@@ -133,8 +133,9 @@ function StoreRegister() {
       
       // Success path
       setError("");
-      setMessage("Seller account ready! Please verify your email.");
-      setTimeout(() => { navigate("/seller", { replace: true }); }, 1500);
+      setMessage("Seller account created! Please verify your email, then sign in.");
+      try { await logout(); } catch(_) {}
+      navigate("/login", { replace: true });
     } catch (error) {
       setError("Failed to create seller account: " + error.message);
     }

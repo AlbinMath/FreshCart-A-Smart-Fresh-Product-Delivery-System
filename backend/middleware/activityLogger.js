@@ -57,10 +57,13 @@ export const logActivity = (action, actionType = 'other', options = {}) => {
     const deviceInfo = getDeviceInfo(userAgent);
     const location = getLocationFromIp(ip);
     
-    // Extract user info from various sources
-    const actorUid = req.user?.uid || 
+    // Extract user info from various sources (prefer req.user.uid, fallback to req.user.id)
+    let actorUid = req.user?.uid || 
                     req.headers['x-actor-uid'] || 
                     req.body?.uid;
+    if (!actorUid && req.user?.id) {
+      actorUid = String(req.user.id);
+    }
                     
     const actorEmail = req.user?.email || 
                       req.headers['x-actor-email'] || 
@@ -152,6 +155,11 @@ export const logActivity = (action, actionType = 'other', options = {}) => {
           } catch (error) {
             console.error('Error fetching target user:', error);
           }
+        }
+
+        // If we still don't have an actor, skip logging to avoid schema validation errors
+        if (!activityData.actorUid) {
+          return;
         }
 
         // Save the activity (fire and forget)

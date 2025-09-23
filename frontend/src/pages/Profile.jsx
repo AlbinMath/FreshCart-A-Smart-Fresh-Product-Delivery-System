@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { validateProfileData, validatePasswordChange, validateAddress, sanitizeInput, validateBusinessLicense } from '../utils/validation';
 import ProfileImageUpload from "../components/ProfileImageUpload";
 import BranchStores from "../components/BranchStores";
-import { uploadLicense, uploadLicenseLink } from "../services/sellerService";
 
 function Profile() {
   const { currentUser, getUserProfile, updateUserProfile, fetchUserProfile, changePassword, sendVerificationEmail, needsEmailVerification, reloadUser, deleteAccount } = useAuth();
@@ -45,13 +44,20 @@ function Profile() {
 
   const [editingAddress, setEditingAddress] = useState(null);
   
-  // Ensure sellers never land on addresses tab
+  // Move this useEffect after all state is initialized
   useEffect(() => {
-    try {
-      const role = (getUserProfile()?.role) || 'customer';
-      if (role === 'seller' && activeTab === 'addresses') setActiveTab('profile');
-    } catch {}
-  }, [activeTab, getUserProfile]);
+    if (currentUser) {
+      try {
+        const userProfile = getUserProfile();
+        const role = userProfile?.role || 'customer';
+        if (role === 'seller' && activeTab === 'addresses') {
+          setActiveTab('profile');
+        }
+      } catch (error) {
+        console.error('Error getting user profile:', error);
+      }
+    }
+  }, [activeTab, currentUser, getUserProfile]);
   
   // Password change state
   const [passwordData, setPasswordData] = useState({
@@ -63,11 +69,18 @@ function Profile() {
 
   const [businessLicenseValidation, setBusinessLicenseValidation] = useState({ isValid: true, message: '' });
 
-  // License upload/link UI state
-  const [showLicensePanel, setShowLicensePanel] = useState(false);
-  const [licenseMode, setLicenseMode] = useState('image'); // 'image' | 'pdf' | 'link'
-  const [licenseForm, setLicenseForm] = useState({ licenseNumber: '', file: null, link: '' });
-  const [licenseLoading, setLicenseLoading] = useState(false);
+  // Helper function to get user role
+  const getUserRole = () => {
+    try {
+      const profile = getUserProfile();
+      return profile?.role || 'customer';
+    } catch (error) {
+      console.error('Error getting user role:', error);
+      return 'customer';
+    }
+  };
+
+  
 
   useEffect(() => {
     if (!currentUser) {
@@ -79,6 +92,12 @@ function Profile() {
     const p = getUserProfile();
     if (p?.role === 'delivery') {
       navigate('/delivery', { replace: true });
+      return;
+    }
+
+    // If admin, redirect to admin dashboard - admins cannot edit profiles
+    if (p?.role === 'admin') {
+      navigate('/admin', { replace: true });
       return;
     }
 
@@ -158,12 +177,22 @@ function Profile() {
       // Sanitize input data
       const sanitizedData = {};
       Object.keys(profileData).forEach(key => {
-        sanitizedData[key] = sanitizeInput(profileData[key]);
+        sanitizedData[key] = typeof profileData[key] === 'string' 
+          ? sanitizeInput(profileData[key])
+          : profileData[key];
       });
 
       // Validate profile data
       const userRole = getUserRole();
       const validationErrors = validateProfileData(sanitizedData, userRole);
+      
+      // Additional validation for business license if user is a seller
+      if (userRole === 'seller' && sanitizedData.businessLicense) {
+        const licenseValidation = validateBusinessLicense(sanitizedData.businessLicense);
+        if (!licenseValidation.isValid) {
+          validationErrors.push(licenseValidation.message);
+        }
+      }
       
       if (validationErrors.length > 0) {
         setMessage({ type: "error", text: validationErrors.join(", ") });
@@ -374,15 +403,32 @@ function Profile() {
     }
   };
 
+
+  // Initialize license preview when business license changes
+  useEffect(() => {
+    if (profileData.businessLicense) {
+      setBusinessLicenseValidation(validateBusinessLicense(profileData.businessLicense));
+    }
+  }, [profileData.businessLicense]);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    const sanitizedValue = sanitizeInput(value);
+    
     setProfileData(prev => ({
       ...prev,
-      [name]: sanitizeInput(value)
+      [name]: sanitizedValue,
+      // Keep businessLicense and licenseNumber in sync
+      ...(name === 'businessLicense' ? { licenseNumber: sanitizedValue } : {})
     }));
     
     if (name === 'businessLicense') {
-      setBusinessLicenseValidation(validateBusinessLicense(value));
+      setBusinessLicenseValidation(validateBusinessLicense(sanitizedValue));
+      // Update license form with the new value
+      setLicenseForm(prev => ({
+        ...prev,
+        licenseNumber: sanitizedValue
+      }));
     }
   };
 
@@ -402,11 +448,7 @@ function Profile() {
     }));
   };
 
-  const getUserRole = () => {
-    const profile = getUserProfile();
-    return profile?.role || 'customer';
-  };
-
+  // Define renderRoleSpecificFields before it's used in JSX
   const renderRoleSpecificFields = () => {
     const userRole = getUserRole();
     
@@ -429,7 +471,7 @@ function Profile() {
               <input
                 type="text"
                 name="businessLicense"
-                placeholder="Format: ss100001 (2 letters + 6 digits)"
+                placeholder="Example: AB123456"
                 value={profileData.businessLicense}
                 onChange={handleInputChange}
                 className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
@@ -438,13 +480,18 @@ function Profile() {
                     : 'border-gray-300'
                 }`}
               />
-              {profileData.businessLicense && (
-                <p className={`mt-1 text-xs ${
-                  businessLicenseValidation.isValid ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {businessLicenseValidation.message}
+              <div className="mt-1">
+                <p className="text-xs text-gray-500">
+                  Format: 2 letters followed by 6 digits (e.g., AB123456)
                 </p>
-              )}
+                {profileData.businessLicense && (
+                  <p className={`text-xs mt-1 ${
+                    businessLicenseValidation.isValid ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {businessLicenseValidation.message}
+                  </p>
+                )}
+              </div>
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">Store Address</label>
@@ -489,183 +536,160 @@ function Profile() {
               />
             </div>
             <div>
-              <div className="flex items-center justify-between">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Business License</label>
-                <button
-                  type="button"
-                  onClick={() => setShowLicensePanel(v => !v)}
-                  className="ml-3 px-3 py-1.5 rounded-md text-xs bg-blue-600 text-white hover:bg-blue-700"
-                >{showLicensePanel ? 'Close' : 'Upload/Link'}</button>
-              </div>
-              <input
-                type="text"
-                name="businessLicense"
-                placeholder="Format: ss100001 (2 letters + 6 digits)"
-                value={profileData.businessLicense}
-                onChange={handleInputChange}
-                className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                  profileData.businessLicense && !businessLicenseValidation.isValid 
-                    ? 'border-red-300' 
-                    : 'border-gray-300'
-                }`}
-              />
-              {profileData.businessLicense && (
-                <p className={`mt-1 text-xs ${
-                  businessLicenseValidation.isValid ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {businessLicenseValidation.message}
-                </p>
-              )}
-
-              {showLicensePanel && (
-                <div className="mt-3 p-4 border rounded-lg bg-gray-50">
-                  <div className="flex items-center gap-2 mb-3">
-                    <button
-                      type="button"
-                      onClick={() => setLicenseMode('image')}
-                      className={`px-2 py-1 text-xs rounded border ${licenseMode==='image'?'bg-green-600 text-white border-green-600':'bg-white text-gray-700'}`}
-                    >Image</button>
-                    <button
-                      type="button"
-                      onClick={() => setLicenseMode('pdf')}
-                      className={`px-2 py-1 text-xs rounded border ${licenseMode==='pdf'?'bg-green-600 text-white border-green-600':'bg-white text-gray-700'}`}
-                    >PDF</button>
-                    <button
-                      type="button"
-                      onClick={() => setLicenseMode('link')}
-                      className={`px-2 py-1 text-xs rounded border ${licenseMode==='link'?'bg-green-600 text-white border-green-600':'bg-white text-gray-700'}`}
-                    >Link</button>
-                  </div>
-
-                  <div className="mb-2">
-                    <label className="block text-xs text-gray-600 mb-1">License Number</label>
+              <div className="mb-6">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Business License Number</label>
+                  <div className="flex gap-2">
                     <input
                       type="text"
-                      value={licenseForm.licenseNumber}
-                      onChange={(e) => setLicenseForm(f => ({ ...f, licenseNumber: e.target.value }))}
-                      placeholder="AB123456"
-                      className="w-full p-2 border rounded"
+                      name="businessLicense"
+                      placeholder="Example: AB123456"
+                      value={profileData.businessLicense}
+                      onChange={handleInputChange}
+                      className={`flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                        profileData.businessLicense && !businessLicenseValidation.isValid 
+                          ? 'border-red-300' 
+                          : 'border-gray-300'
+                      }`}
                     />
-                  </div>
-
-                  {licenseMode !== 'link' && (
-                    <div className="mb-2">
-                      <label className="block text-xs text-gray-600 mb-1">{licenseMode.toUpperCase()} File</label>
-                      <input
-                        type="file"
-                        accept={licenseMode==='pdf' ? 'application/pdf' : 'image/*'}
-                        onChange={(e) => setLicenseForm(f => ({ ...f, file: e.target.files?.[0] || null }))}
-                        className="w-full text-sm"
-                      />
-                    </div>
-                  )}
-
-                  {licenseMode === 'link' && (
-                    <div className="mb-2">
-                      <label className="block text-xs text-gray-600 mb-1">External URL</label>
-                      <input
-                        type="url"
-                        value={licenseForm.link}
-                        onChange={(e) => setLicenseForm(f => ({ ...f, link: e.target.value }))}
-                        placeholder="https://..."
-                        className="w-full p-2 border rounded"
-                      />
-                    </div>
-                  )}
-
-                  <div className="flex justify-end gap-2 mt-3">
                     <button
                       type="button"
-                      disabled={licenseLoading}
                       onClick={async () => {
                         try {
-                          setLicenseLoading(true);
-                          const lic = (licenseForm.licenseNumber || '').trim();
-                          if (!/^[A-Za-z]{2}\d{6}$/.test(lic)) {
-                            alert('License number must be 2 letters followed by 6 digits (e.g., AB123456)');
+                          setLoading(true);
+                          const lic = profileData.businessLicense.trim().toUpperCase();
+                          const validation = validateBusinessLicense(lic);
+                          
+                          if (!validation.isValid) {
+                            setMessage({ type: 'error', text: validation.message || 'Invalid license number format' });
                             return;
                           }
-                          if (licenseMode === 'link') {
-                            if (!/^https?:\/\//i.test(licenseForm.link || '')) {
-                              alert('Please enter a valid URL starting with http(s)://');
-                              return;
-                            }
-                            await uploadLicenseLink({ licenseNumber: lic, licenseUrl: licenseForm.link.trim() });
-                          } else {
-                            if (!licenseForm.file) {
-                              alert('Please choose a file.');
-                              return;
-                            }
-                            const fd = new FormData();
-                            fd.append('licenseNumber', lic);
-                            fd.append('licenseFile', licenseForm.file);
-                            await uploadLicense(fd);
-                          }
-                          alert('Submitted. Status set to pending.');
-                        } catch (e) {
-                          alert(e.message || 'Failed to submit license');
+
+                          // Update the business license in the profile
+                          await updateUserProfile({
+                            ...profileData,
+                            businessLicense: lic,
+                            licenseNumber: lic
+                          });
+
+                          setMessage({ 
+                            type: "success", 
+                            text: "Business license updated successfully!" 
+                          });
+                          
+                        } catch (error) {
+                          console.error('Error updating license:', error);
+                          setMessage({ 
+                            type: "error", 
+                            text: error.message || 'Failed to update license. Please try again.' 
+                          });
                         } finally {
-                          setLicenseLoading(false);
+                          setLoading(false);
                         }
                       }}
-                      className="px-3 py-1.5 rounded bg-green-600 text-white text-xs disabled:bg-green-400"
-                    >{licenseLoading ? 'Submitting…' : 'Submit'}</button>
-                    <button
-                      type="button"
-                      onClick={() => setShowLicensePanel(false)}
-                      className="px-3 py-1.5 rounded border text-xs"
-                    >Close</button>
+                      disabled={loading || !businessLicenseValidation.isValid}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                      {loading ? 'Saving...' : 'Save Number'}
+                    </button>
+                  </div>
+                  <div className="mt-1">
+                    <p className="text-xs text-gray-500">
+                      Format: 2 letters followed by 6 digits (e.g., AB123456)
+                    </p>
+                    {profileData.businessLicense && (
+                      <p className={`text-xs mt-1 ${
+                        businessLicenseValidation.isValid ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {businessLicenseValidation.message}
+                      </p>
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Store Address</label>
-              <textarea
-                name="storeAddress"
-                value={profileData.storeAddress}
-                onChange={handleInputChange}
-                rows="3"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Store Category</label>
-              <select
-                name="sellerCategory"
-                value={profileData.sellerCategory}
-                onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              >
-                <option value="">Select category</option>
-                <option value="fruits">Fruits</option>
-                <option value="vegetables">Vegetables</option>
-                <option value="seafood">Seafood (Fish)</option>
-                <option value="meat">Meat</option>
-                <option value="dairy">Dairy</option>
-                <option value="ready-to-cook">Ready to Cook</option>
-                <option value="other">Other</option>
-              </select>
-              <p className="mt-1 text-xs text-gray-500">Changing the category updates your profile and can be reviewed by admin.</p>
+
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-sm font-medium text-gray-700">License Document</label>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/seller/license-upload')}
+                      className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700"
+                    >
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                      </svg>
+                      Upload License Document
+                    </button>
+                  </div>
+                  
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-blue-700">
+                          To upload your business license document, please use the dedicated license upload page.
+                        </p>
+                        <p className="text-xs text-blue-600 mt-1">
+                          Click the "Upload License Document" button above to access the license upload interface.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Seller Unique Number (read-only) */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Seller Unique Number</label>
-              <input
-                type="text"
-                value={profileData.sellerUniqueNumber || '— will generate on upgrade —'}
-                disabled
-                className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-600"
-                readOnly
-              />
-              <p className="mt-1 text-xs text-gray-500">This ID is auto-generated and cannot be edited.</p>
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Store Address</label>
+                <textarea
+                  name="storeAddress"
+                  value={profileData.storeAddress}
+                  onChange={handleInputChange}
+                  rows="3"
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Store Category</label>
+                <select
+                  name="sellerCategory"
+                  value={profileData.sellerCategory}
+                  onChange={handleInputChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="">Select category</option>
+                  <option value="fruits">Fruits</option>
+                  <option value="vegetables">Vegetables</option>
+                  <option value="seafood">Seafood (Fish)</option>
+                  <option value="meat">Meat</option>
+                  <option value="dairy">Dairy</option>
+                  <option value="ready-to-cook">Ready to Cook</option>
+                  <option value="other">Other</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-500">Changing the category updates your profile and can be reviewed by admin.</p>
+              </div>
 
-            
+              {/* Seller Unique Number (read-only) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Seller Unique Number</label>
+                <input
+                  type="text"
+                  value={profileData.sellerUniqueNumber || '— will generate on upgrade —'}
+                  disabled
+                  className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-600"
+                  readOnly
+                />
+                <p className="mt-1 text-xs text-gray-500">This ID is auto-generated and cannot be edited.</p>
+              </div>
+            </div>
           </>
         );
-      case "delivery":
+    case "delivery":
         return (
           <>
             <div>

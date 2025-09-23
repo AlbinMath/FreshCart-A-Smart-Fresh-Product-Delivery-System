@@ -3,13 +3,25 @@ import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
 export default function ChangePassword() {
-  const { currentUser, changePassword } = useAuth();
+  const { currentUser, changePassword, getUserProfile } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
-  useEffect(() => { if (!currentUser) navigate('/login'); }, [currentUser]);
+  useEffect(() => { 
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    
+    // Check if user is admin - admins cannot change passwords
+    const profile = getUserProfile();
+    if (profile?.role === 'admin') {
+      navigate('/admin', { replace: true });
+      return;
+    }
+  }, [currentUser, navigate, getUserProfile]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

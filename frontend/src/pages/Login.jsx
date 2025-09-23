@@ -12,14 +12,45 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const { login, signInWithGoogle } = useAuth();
+  const { login, signInWithGoogle, currentUser, getUserProfile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
   // Use back button handler
   useBackButtonHandler();
 
+  // Redirect if already logged in
+  useEffect(() => {
+    if (currentUser) {
+      const profile = getUserProfile();
+      
+      // Only redirect if we have a valid profile
+      if (profile) {
+        const emailLower = (currentUser.email || "").toLowerCase();
+        
+        if (profile.role === 'admin' || emailLower === "admin@freshcaer.fc") {
+          navigate('/admin', { replace: true });
+        } else if (profile.role === 'delivery') {
+          navigate('/delivery', { replace: true });
+        } else if (profile.role === 'store' || profile.role === 'seller') {
+          navigate('/seller', { replace: true });
+        } else {
+          navigate('/', { replace: true });
+        }
+      }
+    }
+  }, [currentUser, navigate, getUserProfile]);
+
   const roleParam = new URLSearchParams(location.search).get('role');
+
+  // Show loading if auth is still loading - AFTER all hooks are called
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600"></div>
+      </div>
+    );
+  }
 
   const handleInputChange = async (e) => {
     const { name, value } = e.target;
@@ -37,30 +68,32 @@ function Login() {
     try {
       setError("");
       setLoading(true);
-      await login(formData.email, formData.password);
+      
+      // Call the login function from AuthContext and get Firebase user
+      const credential = await login(formData.email, formData.password);
 
-      // Get user profile for role-based redirect
-      try { 
-        JSON.parse(localStorage.getItem('firebase:authUser') || 'null'); 
-      } catch {}
-      
-      const uidKey = Object.keys(localStorage).find(k => k.startsWith('userProfile_'));
-      const profile = uidKey ? JSON.parse(localStorage.getItem(uidKey) || '{}') : {};
+      // Read stored profile directly by UID to avoid timing issues with currentUser
+      const uid = credential?.user?.uid;
+      const stored = uid ? localStorage.getItem(`userProfile_${uid}`) : null;
+      const profile = stored ? JSON.parse(stored) : null;
+
+      // Fallback: use email to decide admin on first login if profile missing
       const emailLower = (formData.email || "").toLowerCase();
-      
-      // Redirect based on user role
-      if (profile?.role === 'admin' || emailLower === "admin@freshcaer.fc") {
-        navigate('/admin', { replace: true });
-      } else if (profile?.role === 'delivery') {
-        navigate('/delivery', { replace: true });
-      } else if (profile?.role === 'store' || profile?.role === 'seller') {
-        // Sellers go to seller dashboard
-        navigate('/seller', { replace: true });
-      } else {
-        // Regular customers go to home page
-        navigate('/', { replace: true });
-      }
+
+      // Role → path mapping
+      const roleToPath = {
+        admin: '/admin',
+        delivery: '/delivery',
+        seller: '/seller',
+        store: '/seller',
+        customer: '/',
+      };
+
+      const role = profile?.role || (emailLower === 'admin@freshcaer.fc' ? 'admin' : 'customer');
+      const target = roleToPath[role] || '/';
+      navigate(target, { replace: true });
     } catch (error) {
+      console.error('Login error:', error);
       let errorMessage = "Failed to log in";
       
       if (error.code === 'auth/user-not-found') {
@@ -71,13 +104,15 @@ function Login() {
         errorMessage = "Invalid email address";
       } else if (error.code === 'auth/user-disabled') {
         errorMessage = "This account has been disabled";
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = "Too many failed attempts. Please try again later.";
       } else if (error.message) {
         errorMessage = error.message;
       }
       
       setError(errorMessage);
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleGoogleSignIn = async () => {
@@ -85,11 +120,16 @@ function Login() {
       setError("");
       setGoogleLoading(true);
       await signInWithGoogle();
+      
+      // Small delay to ensure state is updated
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       navigate("/", { replace: true }); // Redirect to home page after successful login
     } catch (error) {
+      console.error('Google sign-in error:', error);
       setError("Failed to sign in with Google: " + error.message);
+      setGoogleLoading(false);
     }
-    setGoogleLoading(false);
   };
 
   return (

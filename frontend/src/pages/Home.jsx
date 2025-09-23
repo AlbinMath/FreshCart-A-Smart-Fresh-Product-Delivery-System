@@ -1,16 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import EmailVerification from '../components/EmailVerification';
 
 function Home() {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, getUserProfile } = useAuth();
+  const navigate = useNavigate();
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Check user role and redirect if necessary
+  useEffect(() => {
+    if (currentUser) {
+      const profile = getUserProfile();
+      if (profile) {
+        // Redirect users with specific roles to their dashboards
+        if (profile.role === 'admin') {
+          navigate('/admin', { replace: true });
+          return;
+        } else if (profile.role === 'delivery') {
+          navigate('/delivery', { replace: true });
+          return;
+        } else if (['store', 'seller'].includes(profile.role)) {
+          navigate('/seller', { replace: true });
+          return;
+        }
+      }
+    }
+  }, [currentUser, navigate, getUserProfile]);
 
   // Fetch products from the public API
   useEffect(() => {
@@ -23,11 +44,11 @@ function Home() {
         if (data.success) {
           setProducts(data.products);
         } else {
-          setError('Failed to fetch products');
+          setError('Failed to fetch products/check internet connection');
         }
       } catch (err) {
         console.error('Error fetching products:', err);
-        setError('Failed to load products');
+        setError('Failed to load products/check internet connection');
       } finally {
         setLoading(false);
       }

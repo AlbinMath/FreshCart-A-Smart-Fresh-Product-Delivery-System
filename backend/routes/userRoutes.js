@@ -9,8 +9,37 @@ import BranchLinkRequest from '../models/BranchLinkRequest.js';
 import Notification from '../models/Notification.js';
 import bcrypt from 'bcryptjs';
 import Activity from '../models/Activity.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// Get current authenticated user profile
+router.get('/me', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ success: false, message: 'User not resolved' });
+    }
+
+    const user = await User.findById(req.user.id).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json(user);
+
+  } catch (error) {
+    console.error('Get current user profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+});
 
 // Get user profile
 router.get('/:uid', async (req, res) => {
