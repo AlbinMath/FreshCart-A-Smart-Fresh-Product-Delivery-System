@@ -16,11 +16,11 @@ export const productSchema = new mongoose.Schema({
   stock: { type: Number, default: 0, min: 0 },
   lowStockThreshold: { type: Number, default: 10, min: 0 }, // Threshold for low stock alerts
   images: [{ type: String, trim: true }],
-  // Product approval status for admin verification
-  approvalStatus: { 
-    type: String, 
-    enum: ['pending', 'approved', 'rejected'], 
-    default: 'pending' 
+  // Product status for admin verification
+  status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
   },
   approvedBy: { type: String, default: '' }, // Admin who approved/rejected
   approvalDate: { type: Date },

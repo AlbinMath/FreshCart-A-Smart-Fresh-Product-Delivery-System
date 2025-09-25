@@ -250,9 +250,10 @@ router.get('/products', async (req, res) => {
         const ProductModel = getSellerProductModel(seller.sellerUniqueNumber || seller.uid);
         const products = await ProductModel.find({}).lean();
         
-        // Add seller info to each product
+        // Add seller info and normalize status field for each product
         const productsWithSeller = products.map(product => ({
           ...product,
+          status: product.status || product.approvalStatus || 'pending',
           sellerInfo: {
             uid: seller.uid,
             name: seller.name,
@@ -292,7 +293,7 @@ router.put('/products/:sellerId/:productId/approval', async (req, res) => {
     const ProductModel = getSellerProductModel(sellerId);
     
     const updateData = {
-      approvalStatus: action === 'approve' ? 'approved' : 'rejected',
+      status: action === 'approve' ? 'approved' : 'rejected',
       approvedBy: req.user?.email || 'admin',
       approvalDate: new Date()
     };

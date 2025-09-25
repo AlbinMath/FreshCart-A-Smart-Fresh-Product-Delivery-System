@@ -309,6 +309,16 @@ export default function SellerProducts() {
                                   <span className={`text-xs px-2 py-0.5 rounded-full ${stockStatus.color === 'red' ? 'bg-red-100 text-red-700' : stockStatus.color === 'yellow' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
                                     {stockStatus.text}
                                   </span>
+                                  {p.approvalStatus === 'rejected' && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-600 text-white" title={p.rejectionReason || 'Rejected by Admin'}>
+                                      Rejected by Admin
+                                    </span>
+                                  )}
+                                  {p.approvalStatus === 'pending' && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500 text-white" title="Awaiting admin approval">
+                                      Pending Approval
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="text-xs text-gray-600 mt-1">{p.category}</div>
                                 
@@ -317,13 +327,15 @@ export default function SellerProducts() {
                                   <label className="text-xs text-gray-500">Description:</label>
                                   <textarea
                                     defaultValue={p.description || ''}
-                                    disabled={needsEmailVerification}
+                                    disabled={needsEmailVerification || p.approvalStatus !== 'approved'}
                                     className={`w-full mt-1 p-2 text-xs border rounded resize-none ${
-                                      needsEmailVerification ? 'bg-gray-100 text-gray-500' : ''
+                                      (needsEmailVerification || p.approvalStatus !== 'approved') ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
                                     }`}
                                     rows={2}
-                                    placeholder={needsEmailVerification ? 'Verify email to edit' : 'Add description...'}
+                                    placeholder={needsEmailVerification ? 'Verify email to edit' : (p.approvalStatus !== 'approved' ? 'Awaiting approval/rejected - editing disabled' : 'Add description...')}
+                                    title={p.approvalStatus === 'rejected' ? 'Rejected by admin: editing disabled' : (p.approvalStatus === 'pending' ? 'Pending approval: editing disabled' : '')}
                                     onBlur={async (e) => {
+                                      if (needsEmailVerification || p.approvalStatus !== 'approved') return;
                                       const value = e.target.value.trim();
                                       if (value !== (p.description || '')) {
                                         await updateProduct(p._id, 'description', value);
@@ -343,11 +355,12 @@ export default function SellerProducts() {
                                   min={0}
                                   step="0.01"
                                   defaultValue={p.price}
-                                  disabled={needsEmailVerification}
+                                  disabled={needsEmailVerification || p.approvalStatus !== 'approved'}
                                   className={`w-full mt-1 p-1 border rounded text-sm ${
-                                    needsEmailVerification ? 'bg-gray-100 text-gray-500' : ''
+                                    (needsEmailVerification || p.approvalStatus !== 'approved') ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
                                   }`}
                                   onBlur={async (e) => {
+                                    if (needsEmailVerification || p.approvalStatus !== 'approved') return;
                                     const value = parseFloat(e.target.value);
                                     if (Number.isNaN(value) || value < 0) { e.target.value = p.price; return; }
                                     if (value !== p.price) {
@@ -388,11 +401,12 @@ export default function SellerProducts() {
                                   type="number"
                                   min={0}
                                   defaultValue={p.stock}
-                                  disabled={needsEmailVerification}
+                                  disabled={needsEmailVerification || p.approvalStatus !== 'approved'}
                                   className={`w-full mt-1 p-1 border rounded text-sm ${
-                                    needsEmailVerification ? 'bg-gray-100 text-gray-500' : ''
+                                    (needsEmailVerification || p.approvalStatus !== 'approved') ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
                                   }`}
                                   onBlur={async (e) => {
+                                    if (needsEmailVerification || p.approvalStatus !== 'approved') return;
                                     const value = parseInt(e.target.value, 10);
                                     if (Number.isNaN(value) || value < 0) { e.target.value = p.stock; return; }
                                     if (value !== p.stock) {
@@ -408,11 +422,12 @@ export default function SellerProducts() {
                                   type="number"
                                   min={0}
                                   defaultValue={p.lowStockThreshold || 10}
-                                  disabled={needsEmailVerification}
+                                  disabled={needsEmailVerification || p.approvalStatus !== 'approved'}
                                   className={`w-full mt-1 p-1 border rounded text-sm ${
-                                    needsEmailVerification ? 'bg-gray-100 text-gray-500' : ''
+                                    (needsEmailVerification || p.approvalStatus !== 'approved') ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
                                   }`}
                                   onBlur={async (e) => {
+                                    if (needsEmailVerification || p.approvalStatus !== 'approved') return;
                                     const value = parseInt(e.target.value, 10);
                                     if (Number.isNaN(value) || value < 0) { e.target.value = p.lowStockThreshold || 10; return; }
                                     if (value !== (p.lowStockThreshold || 10)) {

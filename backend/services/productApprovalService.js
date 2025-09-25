@@ -13,12 +13,16 @@ class ProductApprovalService {
     for (const seller of sellers) {
       const ProductModel = getSellerProductModel(seller.uid);
       const products = await ProductModel.find({ 
-        approvalStatus: 'pending' 
+        $or: [
+          { status: 'pending' },
+          { status: { $exists: false }, approvalStatus: 'pending' }
+        ]
       }).lean();
       
       // Add seller info to each product
       const productsWithSeller = products.map(product => ({
         ...product,
+        status: product.status || product.approvalStatus || 'pending',
         seller: {
           uid: seller.uid,
           displayName: seller.displayName || seller.email,
@@ -42,15 +46,15 @@ class ProductApprovalService {
     };
   }
   
-  static async updateProductStatus(sellerUid, productId, { status, adminUid, reason = '' }) {
+  static async updateProductStatus(sellerUid, productId, { approvalStatus, adminUid, reason = '' }) {
     const ProductModel = getSellerProductModel(sellerUid);
     const updateData = {
-      approvalStatus: status,
+      approvalStatus,
       approvedBy: adminUid,
       approvalDate: new Date()
     };
     
-    if (status === 'rejected') {
+    if (approvalStatus === 'rejected') {
       updateData.rejectionReason = reason;
     }
     
@@ -68,24 +72,24 @@ class ProductApprovalService {
     await NotificationService.createNotification({
       uid: sellerUid,
       type: 'product-approval-update',
-      title: `Product ${status}`,
-      message: `Your product "${product.name}" has been ${status}`,
+      title: `Product ${approvalStatus}`,
+      message: `Your product "${product.name}" has been ${approvalStatus}`,
       data: {
         productId: product._id,
-        status,
-        reason: status === 'rejected' ? reason : undefined
+        approvalStatus,
+        reason: approvalStatus === 'rejected' ? reason : undefined
       }
     });
     
     return product;
   }
-  
-  static async getSellerProducts(sellerUid, { status, page = 1, limit = 10 } = {}) {
+
+  static async getSellerProducts(sellerUid, { approvalStatus, page = 1, limit = 10 } = {}) {
     const ProductModel = getSellerProductModel(sellerUid);
     const query = {};
-    
-    if (status) {
-      query.approvalStatus = status;
+
+    if (approvalStatus) {
+      query.approvalStatus = approvalStatus;
     }
     
     const [products, total] = await Promise.all([

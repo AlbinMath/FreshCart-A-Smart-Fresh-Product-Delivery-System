@@ -44,11 +44,11 @@ function Home() {
         if (data.success) {
           setProducts(data.products);
         } else {
-          setError('Failed to fetch products/check internet connection');
+          setError('Failed to fetch products from server');
         }
       } catch (err) {
         console.error('Error fetching products:', err);
-        setError('Failed to load products/check internet connection');
+        setError('Failed to load products from server');
       } finally {
         setLoading(false);
       }
@@ -346,4 +346,5 @@ function Home() {
 }
 
 export default Home;
+
 

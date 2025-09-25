@@ -12,6 +12,8 @@ export default function SellerDashboard() {
   const [pendingCount, setPendingCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const [products, setProducts] = useState([]);
+  // Inline stock edit state for one product at a time
+  const [stockEdit, setStockEdit] = useState({ id: null, value: '' });
   
   // Store hours management state
   const [storeHours, setStoreHours] = useState([]);
@@ -135,7 +137,7 @@ export default function SellerDashboard() {
     // Check for tab parameter in URL
     const urlParams = new URLSearchParams(location.search);
     const tabParam = urlParams.get('tab');
-    if (tabParam && ['overview', 'catalog', 'orders', 'inventory', 'reports', 'hours'].includes(tabParam)) {
+    if (tabParam && ['overview', 'catalog', 'orders', 'reports', 'hours'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
     
@@ -245,9 +247,7 @@ export default function SellerDashboard() {
             { key: "orders", label: "Order Processing", icon: (
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h18M9 7h12M9 11h12M9 15h12M9 19h12M3 7h.01M3 11h.01M3 15h.01M3 19h.01"/></svg>
             )},
-            { key: "inventory", label: "Inventory Management", icon: (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 13V7a2 2 0 00-2-2h-3V3H9v2H6a2 2 0 00-2 2v6m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0H4"/></svg>
-            )},
+          
             { key: "reports", label: "Reports", icon: (
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-6m4 6V7m4 10V9M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
             )},
@@ -538,7 +538,19 @@ export default function SellerDashboard() {
                         )}
                         
                         <div className="flex items-start justify-between mb-2">
-                          <h3 className="font-semibold text-gray-900">{product.name}</h3>
+                          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                            {product.name}
+                            {product.approvalStatus === 'rejected' && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-600 text-white" title={product.rejectionReason || 'Rejected by Admin'}>
+                                Rejected by Admin
+                              </span>
+                            )}
+                            {product.approvalStatus === 'pending' && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500 text-white" title="Awaiting admin approval">
+                                Pending Approval
+                              </span>
+                            )}
+                          </h3>
                           <span className={`text-xs px-2 py-1 rounded-full ${
                             stockStatus.color === 'red' ? 'bg-red-100 text-red-700' :
                             stockStatus.color === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
@@ -563,36 +575,110 @@ export default function SellerDashboard() {
                           </div>
                         </div>
                         
-                        <div className="mt-3 flex gap-2">
-                          <button 
-                            onClick={() => {
-                              if (profile.role === "seller" && profile.provider === "email" && !currentUser.emailVerified) {
-                                alert("Please verify your email before editing products.");
-                                return;
-                              }
-                              navigate('/seller/products');
-                            }}
-                            className={`flex-1 px-3 py-1.5 text-xs rounded ${
-                              profile.role === "seller" && profile.provider === "email" && !currentUser.emailVerified
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                            disabled={profile.role === "seller" && profile.provider === "email" && !currentUser.emailVerified}
-                          >
-                            Edit
-                          </button>
-                          <button 
-                            onClick={() => {
-                              const newStock = prompt(`Update stock for ${product.name}:`, product.stock);
-                              if (newStock !== null && !isNaN(newStock)) {
-                                // Update stock logic would go here
-                                window.location.reload();
-                              }
-                            }}
-                            className="flex-1 px-3 py-1.5 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                          >
-                            Update Stock
-                          </button>
+                        <div className="mt-3 flex flex-col gap-2">
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => {
+                                if (profile.role === "seller" && profile.provider === "email" && !currentUser.emailVerified) {
+                                  alert("Please verify your email before editing products.");
+                                  return;
+                                }
+                                navigate('/seller/products');
+                              }}
+                              className={`flex-1 px-3 py-1.5 text-xs rounded ${
+                                profile.role === "seller" && profile.provider === "email" && !currentUser.emailVerified
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              }`}
+                              disabled={profile.role === "seller" && profile.provider === "email" && !currentUser.emailVerified}
+                            >
+                              Edit
+                            </button>
+                            {/* Inline stock editor toggle */}
+                            {(() => {
+                              const isApproved = ( product.approvalStatus) === 'approved';
+                              return (
+                                <button
+                                  onClick={() => {
+                                    if (!isApproved) {
+                                      const state = (product.approvalStatus);
+                                      alert(state === 'rejected'
+                                        ? 'This product was rejected by admin and cannot be updated.' 
+                                        : 'Pending products cannot be updated until approved.');
+                                      return;
+                                    }
+                                    setStockEdit(prev => ({ id: prev.id === product._id ? null : product._id, value: product.stock }));
+                                  }}
+                                  className={`flex-1 px-3 py-1.5 text-xs rounded ${
+                                    !isApproved ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                  }`}
+                                  disabled={!isApproved}
+                                >
+                                  {stockEdit?.id === product._id ? 'Close' : 'Update Stock'}
+                                </button>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Inline stock edit row */}
+                          {stockEdit?.id === product._id && (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min={0}
+                                value={stockEdit.value}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (v === '') { setStockEdit(s => ({ ...s, value: '' })); return; }
+                                  const n = Number(v);
+                                  if (Number.isFinite(n) && n >= 0) setStockEdit(s => ({ ...s, value: Math.floor(n) }));
+                                }}
+                                className="w-28 px-2 py-1 text-xs border rounded"
+                              />
+                              <button
+                                onClick={async () => {
+                                  // Guard: only allow saving if product is approved (status or legacy approvalStatus)
+                                  const state = ( product.approvalStatus);
+                                  if (state !== 'approved') {
+                                    alert(state === 'rejected'
+                                      ? 'This product was rejected by admin and cannot be updated.'
+                                      : 'Pending products cannot be updated until approved.');
+                                    return;
+                                  }
+
+                                  const n = Number(stockEdit.value);
+                                  if (!Number.isFinite(n) || n < 0) { alert('Enter a valid non-negative number'); return; }
+                                  try {
+                                    const res = await fetch(`http://localhost:5000/api/products/${product._id}`, {
+                                      method: 'PUT',
+                                      headers: { 'Content-Type': 'application/json', 'x-uid': currentUser.uid },
+                                      body: JSON.stringify({ stock: Math.floor(n) })
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok) throw new Error(data?.message || 'Update failed');
+                                    // Refresh products
+                                    const pr = await fetch('http://localhost:5000/api/products', { headers: { 'x-uid': currentUser.uid } });
+                                    const pd = await pr.json();
+                                    if (pr.ok && Array.isArray(pd.products)) {
+                                      setProducts(pd.products);
+                                    }
+                                    setStockEdit({ id: null, value: '' });
+                                  } catch (e) {
+                                    alert(e.message || 'Failed to update stock');
+                                  }
+                                }}
+                                className="px-3 py-1.5 text-xs rounded bg-green-600 text-white hover:bg-green-700"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setStockEdit({ id: null, value: '' })}
+                                className="px-3 py-1.5 text-xs rounded bg-gray-200 text-gray-700 hover:bg-gray-300"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );

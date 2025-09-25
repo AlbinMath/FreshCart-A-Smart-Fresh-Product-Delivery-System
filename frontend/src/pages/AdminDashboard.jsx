@@ -124,8 +124,10 @@ function AdminDashboard() {
         const productsResponse = await fetch(`${API_BASE_URL}/admin/products`, { headers });
         if (productsResponse.ok) {
           const productsData = await productsResponse.json();
-          setProducts(productsData);
-          setFilteredProducts(productsData);
+          // Normalize field names to avoid UI mismatches
+          const normalized = productsData.map(p => ({ ...p, approvalStatus: p.approvalStatus ?? p.status }));
+          setProducts(normalized);
+          setFilteredProducts(normalized);
         }
       } catch (error) {
         console.error('Error loading products:', error);
@@ -198,11 +200,13 @@ function AdminDashboard() {
         const headers = { Accept: 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
         const prodRes = await fetch(`${API_BASE_URL}/admin/products`, { headers });
-        if (productsResponse.ok) {
-          const productsData = await productsResponse.json();
-          setProducts(productsData);
+        if (prodRes.ok) {
+          const productsData = await prodRes.json();
+          // Normalize field names to avoid UI mismatches
+          const normalized = productsData.map(p => ({ ...p, approvalStatus: p.approvalStatus ?? p.status }));
+          setProducts(normalized);
           // Apply current filter to refreshed data
-          applyProductFilter(productFilter, productsData);
+          applyProductFilter(productFilter, normalized);
         }
       } else {
         console.error(`Failed to ${action} product`);
@@ -216,7 +220,7 @@ function AdminDashboard() {
   const applyProductFilter = (status, productsData = products) => {
     const filtered = status === 'all' 
       ? productsData 
-      : productsData.filter(p => (p.approvalStatus || 'pending') === status);
+      : productsData.filter(p => (p.status || 'pending') === status);
     setFilteredProducts(filtered);
     setProductFilter(status);
   };
@@ -1342,16 +1346,16 @@ function AdminDashboard() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              product.approvalStatus === 'approved' ? 'bg-green-100 text-green-800' : 
-                              product.approvalStatus === 'rejected' ? 'bg-red-100 text-red-800' :
+                              (product.status || product.approvalStatus) === 'approved' ? 'bg-green-100 text-green-800' : 
+                              (product.status || product.approvalStatus) === 'rejected' ? 'bg-red-100 text-red-800' :
                               'bg-yellow-100 text-yellow-800'
                             }`}>
-                              {product.approvalStatus || 'pending'}
+                              {product.status || product.approvalStatus || 'pending'}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex space-x-2">
-                              {product.approvalStatus !== 'approved' && (
+                              {(product.status || product.approvalStatus) !== 'approved' && (
                                 <button 
                                   onClick={() => handleProductApproval(product.sellerInfo.sellerUniqueNumber || product.sellerInfo.uid, product._id, 'approve')}
                                   className="text-green-600 hover:text-green-900"
@@ -1359,7 +1363,7 @@ function AdminDashboard() {
                                   Approve
                                 </button>
                               )}
-                              {product.approvalStatus !== 'rejected' && (
+                              {(product.status || product.approvalStatus) !== 'rejected' && (
                                 <button 
                                   onClick={() => handleProductApproval(product.sellerInfo.sellerUniqueNumber || product.sellerInfo.uid, product._id, 'reject')}
                                   className="text-red-600 hover:text-red-900"
@@ -1403,7 +1407,7 @@ function AdminDashboard() {
                       Total Products: {products.length}
                     </div>
                     <div className="text-sm text-gray-600">
-                      Pending: {products.filter(p => p.approvalStatus === 'pending').length}
+                      Pending: {products.filter(p => (p.status || p.approvalStatus || 'pending') === 'pending').length}
                     </div>
                     <button 
                       onClick={loadAdminData}
@@ -1436,7 +1440,7 @@ function AdminDashboard() {
                         {status.charAt(0).toUpperCase() + status.slice(1)} 
                         {status !== 'all' && (
                           <span className="ml-1 text-xs">
-                            ({products.filter(p => (p.approvalStatus || 'pending') === status).length})
+                            ({products.filter(p => ((p.status || p.approvalStatus || 'pending') === status)).length})
                           </span>
                         )}
                       </button>
@@ -1520,13 +1524,13 @@ function AdminDashboard() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              product.approvalStatus === 'approved' ? 'bg-green-100 text-green-800' : 
-                              product.approvalStatus === 'rejected' ? 'bg-red-100 text-red-800' :
+                              (product.status || product.approvalStatus) === 'approved' ? 'bg-green-100 text-green-800' : 
+                              (product.status || product.approvalStatus) === 'rejected' ? 'bg-red-100 text-red-800' :
                               'bg-yellow-100 text-yellow-800'
                             }`}>
-                              {product.approvalStatus || 'pending'}
+                              {product.status || product.approvalStatus || 'pending'}
                             </span>
-                            {product.approvalStatus === 'rejected' && product.rejectionReason && (
+                            {(product.status || product.approvalStatus) === 'rejected' && product.rejectionReason && (
                               <div className="text-xs text-red-600 mt-1 max-w-xs truncate" title={product.rejectionReason}>
                                 Reason: {product.rejectionReason}
                               </div>
@@ -1539,7 +1543,7 @@ function AdminDashboard() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex flex-col space-y-1">
-                              {product.approvalStatus !== 'approved' && (
+                              {(product.status || product.approvalStatus) !== 'approved' && (
                                 <button 
                                   onClick={() => handleProductApproval(
                                     product.sellerInfo.sellerUniqueNumber || product.sellerInfo.uid, 
@@ -1551,7 +1555,7 @@ function AdminDashboard() {
                                   ✓ Approve
                                 </button>
                               )}
-                              {product.approvalStatus !== 'rejected' && (
+                              {(product.status || product.approvalStatus) !== 'rejected' && (
                                 <button 
                                   onClick={() => handleProductApproval(
                                     product.sellerInfo.sellerUniqueNumber || product.sellerInfo.uid, 
@@ -1566,7 +1570,7 @@ function AdminDashboard() {
                               <button 
                                 onClick={() => {
                                   // Show product details modal (can be implemented later)
-                                  alert(`Product Details:\n\nName: ${product.name}\nDescription: ${product.description}\nPrice: ₹${product.price}\nStock: ${product.stock}\nCategory: ${product.category}\nSeller: ${product.sellerInfo?.name}\nStatus: ${product.approvalStatus || 'pending'}`);
+                                  alert(`Product Details:\n\nName: ${product.name}\nDescription: ${product.description}\nPrice: ₹${product.price}\nStock: ${product.stock}\nCategory: ${product.category}\nSeller: ${product.sellerInfo?.name}\nStatus: ${(product.status || product.approvalStatus || 'pending')}`);
                                 }}
                                 className="text-blue-600 hover:text-blue-900 text-xs font-medium"
                               >
@@ -1605,7 +1609,7 @@ function AdminDashboard() {
                       <div className="ml-3">
                         <p className="text-sm font-medium text-yellow-800">Pending Approval</p>
                         <p className="text-2xl font-semibold text-yellow-900">
-                          {products.filter(p => (p.approvalStatus || 'pending') === 'pending').length}
+                          {products.filter(p => ((p.status || p.approvalStatus || 'pending') === 'pending')).length}
                         </p>
                       </div>
                     </div>
@@ -1621,7 +1625,7 @@ function AdminDashboard() {
                       <div className="ml-3">
                         <p className="text-sm font-medium text-green-800">Approved</p>
                         <p className="text-2xl font-semibold text-green-900">
-                          {products.filter(p => (p.approvalStatus || 'pending') === 'approved').length}
+                          {products.filter(p => ((p.status || p.approvalStatus || 'pending') === 'approved')).length}
                         </p>
                       </div>
                     </div>
@@ -1637,7 +1641,7 @@ function AdminDashboard() {
                       <div className="ml-3">
                         <p className="text-sm font-medium text-red-800">Rejected</p>
                         <p className="text-2xl font-semibold text-red-900">
-                          {products.filter(p => (p.approvalStatus || 'pending') === 'rejected').length}
+                          {products.filter(p => ((p.status || p.approvalStatus || 'pending') === 'rejected')).length}
                         </p>
                       </div>
                     </div>

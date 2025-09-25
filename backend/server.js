@@ -18,6 +18,7 @@ import licenseRoutes from './routes/licenseRoutes.js';
 import adminLicenseRoutes from './routes/adminLicenseRoutes.js';
 import { logActivity } from './middleware/activityLogger.js';
 import Activity from './models/Activity.js';
+import { initCronJobs } from './scripts/cronJobs.js';
 
 dotenv.config();
 
@@ -129,6 +130,9 @@ const server = createServer(app);
 
 // Initialize Socket.IO
 initSocket(server);
+
+// Start scheduled jobs
+initCronJobs();
 
 // Start Server
 const PORT = process.env.PORT || 5000;

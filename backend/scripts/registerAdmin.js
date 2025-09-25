@@ -4,19 +4,7 @@ import User from '../models/User.js';
 
 dotenv.config();
 
-async function upsertAdmin() {
-  // Admin details provided by user
-  const input = {
-    uid: 'admin-1726395599000',
-    name: 'Admin',
-    email: 'cartfresh44@gmail.com',
-    password: 'Admin@123',
-    role: 'admin',
-    phone: '9496176348',
-    adminLevel: 'super',
-    provider: 'email',
-    adminAccessCode: '252466' // NOTE: not persisted; field not defined in schema
-  };
+
 
   if (!process.env.MONGODB_URI) {
     console.error('❌ MONGODB_URI is not set in environment.');
@@ -74,6 +62,6 @@ async function upsertAdmin() {
     console.log('🔌 Disconnected from MongoDB');
     process.exit(0);
   }
-}
+
 
 upsertAdmin();

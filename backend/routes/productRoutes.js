@@ -92,7 +92,12 @@ router.get('/products', requireSeller, async (req, res) => {
   try {
     const SellerProduct = getSellerProductModel(req.seller.sellerUniqueNumber || req.seller.uid);
     const items = await SellerProduct.find({}).sort({ createdAt: -1 });
-    res.json({ success: true, products: items });
+    // Normalize legacy field name so UI always sees `status`
+    const products = items.map(p => {
+      const obj = typeof p.toObject === 'function' ? p.toObject() : p;
+      return { ...obj, status: obj.status || obj.approvalStatus || 'pending' };
+    });
+    res.json({ success: true, products });
   } catch (err) {
     console.error('List products error:', err);
     res.status(500).json({ success: false, message: 'Internal server error' });
@@ -113,9 +118,12 @@ router.put('/products/:id', requireSeller, async (req, res) => {
     const prod = await SellerProduct.findById(id);
     if (!prod) return res.status(404).json({ success: false, message: 'Product not found' });
 
-    // Block modifications to rejected products by sellers
-    if (prod.approvalStatus === 'rejected') {
-      return res.status(403).json({ success: false, message: 'Rejected products cannot be modified. Please create a new product or contact admin.' });
+    // Block modifications to non-approved products by sellers (pending or rejected)
+    // Normalize status from document to support legacy `approvalStatus`
+    const prodObj = typeof prod.toObject === 'function' ? prod.toObject() : prod;
+    const currentStatus =  prodObj.approvalStatus;
+    if (currentStatus !== 'approved') {
+      return res.status(403).json({ success: false, message: 'Only approved products can be modified. Pending or rejected products cannot be edited.' });
     }
 
     // Apply updates with constraints
@@ -143,10 +151,12 @@ router.put('/products/:id', requireSeller, async (req, res) => {
       prod.mrpPrice = mrpPrice;
     }
     if (stock !== undefined) {
-      if (typeof stock !== 'number' || stock < 0) {
-        return res.status(400).json({ success: false, message: 'Stock cannot be negative' });
+      // Accept numeric strings from frontend and coerce to number
+      const parsedStock = typeof stock === 'string' ? Number(stock) : stock;
+      if (!Number.isFinite(parsedStock) || parsedStock < 0) {
+        return res.status(400).json({ success: false, message: 'Stock must be a non-negative number' });
       }
-      prod.stock = stock;
+      prod.stock = Math.floor(parsedStock);
     }
     if (lowStockThreshold !== undefined) {
       if (typeof lowStockThreshold !== 'number' || lowStockThreshold < 0) {
@@ -190,7 +200,8 @@ router.get('/public/products', async (req, res) => {
       try {
         const ProductModel = getSellerProductModel(seller.sellerUniqueNumber || seller.uid);
         // Only fetch admin-approved products
-        const products = await ProductModel.find({ approvalStatus: 'approved' }).lean();
+        // Include all products (approved and rejected) for visibility, but rejected ones will be marked as unavailable
+        const products = await ProductModel.find({ status: { $in: ['approved', 'rejected'] } }).lean();
         
         // Add seller info to each product
         const productsWithSeller = products.map(product => ({
