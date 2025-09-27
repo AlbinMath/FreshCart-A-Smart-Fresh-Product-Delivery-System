@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { checkSellerRole } from '../services/sellerService';
+import { checkSellerRole } from '../../../backend/services/sellerService';
 
 const SessionDebug = () => {
   const { currentUser, getUserProfile } = useAuth();

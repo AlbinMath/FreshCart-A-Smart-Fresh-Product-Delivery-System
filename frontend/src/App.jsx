@@ -43,6 +43,13 @@ import SellerSchedule from "./pages/SellerSchedule";
 import SellerLicenseUpload from "./pages/SellerLicenseUpload";
 import LicenseVerification from "./pages/admin/LicenseVerification";
 import Wallet from "./pages/Wallet";
+import Cart from "./pages/Cart";
+import AddressConfirmationPage from "./pages/AddressConfirmationPage";
+import AddAddressPage from "./pages/AddAddressPage";
+import PaymentPage from "./pages/PaymentPage";
+import OrderConfirmationPage from "./pages/OrderConfirmationPage";
+import ProcessingPage from "./pages/ProcessingPage";
+import CustomerPage from "./pages/CustomerPage";
 import AdminSellerLicense from "./pages/admin/AdminSellerLicense";
 
 // Role-aware landing: send users to appropriate dashboards
@@ -249,11 +256,67 @@ function AppContent() {
                     </ProtectedRoute>
                   }
                 />
-                <Route 
-                  path="/wallet" 
+                <Route
+                  path="/wallet"
                   element={
                     <ProtectedRoute allowedRoles={["customer", "store", "seller", "delivery", "admin"]}>
                       <Wallet />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/cart"
+                  element={
+                    <ProtectedRoute allowedRoles={["customer"]}>
+                      <Cart />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/address-confirmation"
+                  element={
+                    <ProtectedRoute allowedRoles={["customer"]}>
+                      <AddressConfirmationPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/add-address"
+                  element={
+                    <ProtectedRoute allowedRoles={["customer"]}>
+                      <AddAddressPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/payment"
+                  element={
+                    <ProtectedRoute allowedRoles={["customer"]}>
+                      <PaymentPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/order-confirmation"
+                  element={
+                    <ProtectedRoute allowedRoles={["customer"]}>
+                      <OrderConfirmationPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/processing"
+                  element={
+                    <ProtectedRoute allowedRoles={["customer"]}>
+                      <ProcessingPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/customer"
+                  element={
+                    <ProtectedRoute allowedRoles={["customer"]}>
+                      <CustomerPage />
                     </ProtectedRoute>
                   }
                 />

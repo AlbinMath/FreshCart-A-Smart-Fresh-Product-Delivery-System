@@ -15,7 +15,7 @@ import {
   fetchSignInMethodsForEmail,
   reload
 } from "firebase/auth";
-import authService from "../services/authService";
+import authService from "../../../backend/services/authService";
 
 const AuthContext = React.createContext();
 

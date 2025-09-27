@@ -9,7 +9,7 @@ import {
   getNotificationStats,
   updateNotificationPreferences,
   getUnreadCount
-} from '../services/notificationService';
+} from '../../../backend/services/notificationService';
 
 const NotificationContext = createContext();
 

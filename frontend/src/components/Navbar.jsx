@@ -109,12 +109,20 @@ function Navbar() {
                   )}
                   
                   {userProfile?.role === 'customer' && (
-                    <Link
-                      to="/products"
-                      className="text-gray-700 hover:text-green-600 px-3 py-2 rounded-md text-sm font-medium"
-                    >
-                      Products
-                    </Link>
+                    <>
+                      <Link
+                        to="/cart"
+                        className="text-gray-700 hover:text-green-600 px-3 py-2 rounded-md text-sm font-medium"
+                      >
+                        Cart
+                      </Link>
+                      <Link
+                        to="/customer"
+                        className="text-gray-700 hover:text-green-600 px-3 py-2 rounded-md text-sm font-medium"
+                      >
+                        My Orders
+                      </Link>
+                    </>
                   )}
                   
                   {userProfile?.role === 'delivery' ? (

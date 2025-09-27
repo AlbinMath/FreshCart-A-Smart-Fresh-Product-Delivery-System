@@ -1,5 +1,5 @@
 import { getSellerProductModel } from '../models/Product.js';
-import NotificationService from './notificationService.js';
+import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 
 class ProductApprovalService {
@@ -69,8 +69,8 @@ class ProductApprovalService {
     }
     
     // Notify seller about the status update
-    await NotificationService.createNotification({
-      uid: sellerUid,
+    const notification = new Notification({
+      userId: sellerUid,
       type: 'product-approval-update',
       title: `Product ${approvalStatus}`,
       message: `Your product "${product.name}" has been ${approvalStatus}`,
@@ -80,6 +80,7 @@ class ProductApprovalService {
         reason: approvalStatus === 'rejected' ? reason : undefined
       }
     });
+    await notification.save();
     
     return product;
   }

@@ -2,8 +2,7 @@ import mongoose from 'mongoose';
 
 // Keep categories aligned with User.sellerCategory enum
 export const PRODUCT_CATEGORIES = [
-  'vegetables', 'fruits', 'dairy', 'meat', 'seafood', 'ready-to-cook',
-  'organic', 'bakery', 'beverages', 'household', 'other'
+  'vegetables', 'fruits', 'dairy', 'meat', 'seafood', 'other'
 ];
 
 // Base product schema (reused across seller-specific collections)

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import EmailVerification from '../components/EmailVerification';
+import { cartService } from '../../../backend/services/cartService';
 
 function Home() {
   const { currentUser, logout, getUserProfile } = useAuth();
@@ -12,6 +13,8 @@ function Home() {
   const [error, setError] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [stock, setStock] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(new Set());
 
   // Check user role and redirect if necessary
   useEffect(() => {
@@ -38,7 +41,9 @@ function Home() {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/public/products`);
+        // Always use public endpoint without includeAll to enforce approved + in-stock filtering on backend
+        const url = `${import.meta.env.VITE_API_BASE_URL}/public/products`;
+        const response = await fetch(url);
         const data = await response.json();
         
         if (data.success) {
@@ -59,37 +64,45 @@ function Home() {
 
 
 
-  // Filter products based on category and search term
-  const filteredProducts = products.filter(product => {
-    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.description.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  // Filter products based on category and search term; always require stock > 0
+  const filteredProducts = products
+    .filter(product => {
+      const productCategory = String(product.category || 'other').toLowerCase();
+      const matchesCategory = selectedCategory === 'all' || productCategory === selectedCategory;
+      const name = String(product.name || '').toLowerCase();
+      const desc = String(product.description || '').toLowerCase();
+      const term = searchTerm.toLowerCase();
+      const matchesSearch = name.includes(term) || desc.includes(term);
+      const stockValue = Number(product.stock ?? 0);
+      const matchesStock = stockValue > 0; // Always in-stock only
+      return matchesCategory && matchesSearch && matchesStock;
+    });
 
   // Sort in-stock first, then by higher stock count
   const sortedFilteredProducts = [...filteredProducts].sort((a, b) => {
-    const aIn = a.stock > 0;
-    const bIn = b.stock > 0;
+    const aStock = Number(a.stock ?? 0);
+    const bStock = Number(b.stock ?? 0);
+    const aIn = aStock > 0;
+    const bIn = bStock > 0;
     if (aIn && !bIn) return -1;
     if (!aIn && bIn) return 1;
-    return (b.stock || 0) - (a.stock || 0);
+    return bStock - aStock;
   });
 
-  // Group by category after sorting
+  // Group by category (normalized to lowercase) after sorting
   const groupedByCategory = sortedFilteredProducts.reduce((acc, p) => {
-    const key = p.category || 'other';
+    const key = String(p.category || 'other').toLowerCase();
     if (!acc[key]) acc[key] = [];
     acc[key].push(p);
     return acc;
   }, {});
 
-  // Categories for filter dropdown (from all products)
-  const categories = ['all', ...new Set(products.map(product => product.category))];
+  // Categories for filter dropdown (normalized)
+  const categories = ['all', ...new Set(products.map(product => String(product.category || 'other').toLowerCase()))];
 
-  // Categories to display in sections
+  // Categories to display in sections (normalized)
   const categoriesForDisplay = selectedCategory === 'all'
-    ? Array.from(new Set(sortedFilteredProducts.map(p => p.category)))
+    ? Array.from(new Set(sortedFilteredProducts.map(p => String(p.category || 'other').toLowerCase())))
     : [selectedCategory];
 
   const formatPrice = (price) => {
@@ -97,6 +110,46 @@ function Home() {
       style: 'currency',
       currency: 'INR'
     }).format(price);
+  };
+
+  const handleAddToCart = async (product) => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+
+    const profile = getUserProfile();
+    if (profile?.role !== 'customer') {
+      alert('Only customers can add items to cart');
+      return;
+    }
+
+    setAddingToCart(prev => new Set(prev).add(product._id));
+
+    try {
+      // Use the identifier as expected by getSellerProductModel (not the full collection name)
+      const identifier = product.sellerInfo?.sellerUniqueNumber || product.sellerInfo?.uid || 'unknown';
+      const safeIdentifier = String(identifier).replace(/[^a-zA-Z0-9_-]/g, '_');
+
+      await cartService.addToCart(currentUser.uid, {
+        productId: product._id,
+        sellerCollection: safeIdentifier, // Pass just the identifier
+        sellerUid: product.sellerInfo?.uid,
+        quantity: 1
+      });
+
+      // Show success message
+      alert('Product added to cart successfully!');
+    } catch (err) {
+      console.error('Error adding to cart:', err);
+      alert(err.message || 'Failed to add product to cart');
+    } finally {
+      setAddingToCart(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(product._id);
+        return newSet;
+      });
+    }
   };
 
   return (
@@ -185,6 +238,17 @@ function Home() {
                   ))}
                 </select>
               </div>
+
+              {/* In Stock Only Toggle */}
+              <label className="flex items-center gap-2 select-none">
+                <input
+                  type="checkbox"
+                  checked={stock}
+                  onChange={(e) => setStock(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                />
+                <span className="text-sm text-gray-700">In Stock only</span>
+              </label>
             </div>
           </div>
 
@@ -281,14 +345,19 @@ function Home() {
                           
                           {/* Add to Cart Button */}
                           <button
-                            disabled={product.stock === 0}
+                            onClick={() => handleAddToCart(product)}
+                            disabled={product.stock === 0 || addingToCart.has(product._id)}
                             className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
-                              product.stock > 0
+                              product.stock > 0 && !addingToCart.has(product._id)
                                 ? 'bg-blue-500 hover:bg-blue-600 text-white'
                                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             }`}
                           >
-                            {product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
+                            {addingToCart.has(product._id)
+                              ? 'Adding...'
+                              : product.stock > 0
+                                ? 'Add to Cart'
+                                : 'Out of Stock'}
                           </button>
                         </div>
                       </div>

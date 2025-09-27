@@ -1,0 +1,400 @@
+import express from 'express';
+import Razorpay from 'razorpay';
+import Order from '../models/Order.js';
+import Payment from '../models/Payment.js';
+import User from '../models/User.js';
+import crypto from 'crypto';
+import { calculateTotal } from '../utils/deliveryUtils.js';
+
+const router = express.Router();
+
+// Initialize Razorpay
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_RL7iTlLIMH8nZY',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'rwk1544M3HCWZOAb7E6A2X07'
+});
+
+// Create order
+router.post('/create', async (req, res) => {
+  try {
+    const { userId, products, subtotal, deliveryFee, totalAmount, paymentMethod, deliveryAddress, storeDetails, cartItems } = req.body;
+
+    if (!userId || !products || !subtotal || !deliveryFee || !totalAmount || !paymentMethod || !deliveryAddress || !storeDetails) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+
+    // Validate totalAmount
+    const calculatedTotal = subtotal + deliveryFee;
+    if (Math.abs(calculatedTotal - totalAmount) > 0.01) {
+      return res.status(400).json({ success: false, message: 'Invalid total amount calculation' });
+    }
+
+    // Generate unique order ID
+    const orderId = `FC${Date.now()}${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+
+    const orderData = {
+      orderId,
+      userId,
+      products,
+      subtotal,
+      deliveryFee,
+      totalAmount,
+      paymentMethod,
+      deliveryAddress,
+      storeDetails,
+      statusTimeline: [{
+        status: 'Order Placed',
+        timestamp: new Date()
+      }]
+    };
+
+    if (paymentMethod === 'COD') {
+      // Create order directly for COD
+      const order = new Order({
+        ...orderData,
+        paymentStatus: 'pending' // For COD, payment is pending until delivery
+      });
+
+      await order.save();
+
+      // Create payment record for COD
+      const payment = new Payment({
+        userId,
+        orderId,
+        paymentId: `COD_${orderId}`,
+        amount: totalAmount,
+        currency: 'INR',
+        paymentStatus: 'pending',
+        cartItems: cartItems || products.map(p => ({
+          productId: p.id,
+          productName: p.name,
+          quantity: p.quantity,
+          price: p.price
+        })),
+        deliveryAddress,
+        subtotal,
+        deliveryFee,
+        totalAmount
+      });
+
+      await payment.save();
+
+      res.json({
+        success: true,
+        orderId: order.orderId,
+        message: 'Order placed successfully'
+      });
+    } else if (paymentMethod === 'Razorpay') {
+      // Create Razorpay order
+      const options = {
+        amount: totalAmount * 100, // Razorpay expects amount in paisa
+        currency: 'INR',
+        receipt: orderId,
+        payment_capture: 1
+      };
+
+      const razorpayOrder = await razorpay.orders.create(options);
+
+      // Save order with razorpay details
+      const order = new Order({
+        ...orderData,
+        razorpayOrderId: razorpayOrder.id,
+        paymentStatus: 'pending'
+      });
+
+      await order.save();
+
+      // Create payment record for Razorpay
+      const payment = new Payment({
+        userId,
+        orderId,
+        paymentId: razorpayOrder.id,
+        amount: totalAmount,
+        currency: 'INR',
+        paymentStatus: 'pending',
+        cartItems: cartItems || products.map(p => ({
+          productId: p.id,
+          productName: p.name,
+          quantity: p.quantity,
+          price: p.price
+        })),
+        deliveryAddress,
+        subtotal,
+        deliveryFee,
+        totalAmount
+      });
+
+      await payment.save();
+
+      res.json({
+        success: true,
+        order: {
+          id: razorpayOrder.id,
+          amount: razorpayOrder.amount,
+          currency: razorpayOrder.currency,
+          orderId: order.orderId
+        }
+      });
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid payment method' });
+    }
+  } catch (error) {
+    console.error('Error creating order:', error);
+    res.status(500).json({ success: false, message: 'Failed to create order' });
+  }
+});
+
+// Verify Razorpay payment
+router.post('/verify-payment', async (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderId } = req.body;
+
+    // Generate expected signature
+    const sign = razorpay_order_id + '|' + razorpay_payment_id;
+    const expectedSign = crypto
+      .createHmac('sha256', razorpay.key_secret)
+      .update(sign.toString())
+      .digest('hex');
+
+    if (razorpay_signature === expectedSign) {
+      // Payment verified, update order
+      const order = await Order.findOneAndUpdate(
+        { orderId },
+        {
+          razorpayPaymentId: razorpay_payment_id,
+          paymentStatus: 'paid',
+          status: 'Processing',
+          $push: {
+            statusTimeline: {
+              status: 'Order Confirmed',
+              timestamp: new Date()
+            }
+          }
+        },
+        { new: true }
+      );
+
+      if (!order) {
+        return res.status(404).json({ success: false, message: 'Order not found' });
+      }
+
+      // Update payment record
+      await Payment.findOneAndUpdate(
+        { orderId },
+        {
+          paymentStatus: 'paid',
+          paymentId: razorpay_payment_id
+        }
+      );
+
+      res.json({
+        success: true,
+        orderId: order.orderId,
+        message: 'Payment verified and order confirmed'
+      });
+    } else {
+      // Payment failed
+      await Order.findOneAndUpdate(
+        { orderId },
+        {
+          paymentStatus: 'failed',
+          $push: {
+            statusTimeline: {
+              status: 'Payment Failed',
+              timestamp: new Date()
+            }
+          }
+        }
+      );
+
+      // Update payment record
+      await Payment.findOneAndUpdate(
+        { orderId },
+        { paymentStatus: 'failed' }
+      );
+
+      res.status(400).json({ success: false, message: 'Payment verification failed' });
+    }
+  } catch (error) {
+    console.error('Error verifying payment:', error);
+    res.status(500).json({ success: false, message: 'Payment verification error' });
+  }
+});
+
+// Get order status
+router.get('/status/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const order = await Order.findOne({ orderId });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    res.json({
+      success: true,
+      order: {
+        orderId: order.orderId,
+        status: order.status,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        timestamp: order.timestamp
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching order status:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch order status' });
+  }
+});
+
+// Get user orders
+router.get('/list/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const orders = await Order.find({ userId }).sort({ timestamp: -1 });
+
+    // Group orders by status
+    const groupedOrders = {
+      processing: orders.filter(order => order.status === 'Processing'),
+      underDelivery: orders.filter(order => order.status === 'Under Delivery'),
+      completed: orders.filter(order => order.status === 'Completed'),
+      cancelled: orders.filter(order => order.status === 'Cancelled')
+    };
+
+    res.json({
+      success: true,
+      orders: groupedOrders
+    });
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch orders' });
+  }
+});
+
+// Update order status (for admin/delivery)
+router.put('/status/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { status } = req.body;
+
+    const order = await Order.findOneAndUpdate(
+      { orderId },
+      {
+        status,
+        $push: {
+          statusTimeline: {
+            status,
+            timestamp: new Date()
+          }
+        }
+      },
+      { new: true }
+    );
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    res.json({
+      success: true,
+      order: {
+        orderId: order.orderId,
+        status: order.status
+      }
+    });
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    res.status(500).json({ success: false, message: 'Failed to update order status' });
+  }
+});
+
+// Cancel order (for customers - only processing orders within 6 minutes)
+router.put('/cancel/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { userId } = req.body;
+
+    // Find the order and check if it can be cancelled
+    const order = await Order.findOne({ orderId, userId });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (order.status !== 'Processing') {
+      return res.status(400).json({
+        success: false,
+        message: 'Order cannot be cancelled. Only processing orders can be cancelled.'
+      });
+    }
+
+    // Check if order is within 6 minutes
+    const orderTime = new Date(order.timestamp);
+    const now = new Date();
+    const sixMinutes = 6 * 60 * 1000; // 6 minutes in milliseconds
+
+    if (now - orderTime > sixMinutes) {
+      return res.status(400).json({
+        success: false,
+        message: 'Order cannot be cancelled. Cancellation window has expired (6 minutes).'
+      });
+    }
+
+    // Update order status to cancelled and add timeline entry
+    const updatedOrder = await Order.findOneAndUpdate(
+      { orderId, userId },
+      {
+        status: 'Cancelled',
+        $push: {
+          statusTimeline: {
+            status: 'Order Cancelled',
+            timestamp: new Date()
+          }
+        }
+      },
+      { new: true }
+    );
+
+    // Handle refund for online payments
+    if (order.paymentMethod === 'Razorpay' && order.paymentStatus === 'paid') {
+      // Update payment status to refunded
+      await Payment.findOneAndUpdate(
+        { orderId },
+        { paymentStatus: 'refunded' }
+      );
+
+      // Credit wallet
+      const refundAmount = order.totalAmount;
+      await User.findOneAndUpdate(
+        { uid: userId },
+        {
+          $inc: { balance: refundAmount },
+          $push: {
+            walletTransactions: {
+              type: 'credit',
+              amount: refundAmount,
+              description: `Refund for order ${orderId}`,
+              reference: `REFUND_${orderId}`,
+              status: 'completed'
+            }
+          }
+        }
+      );
+    }
+
+    res.json({
+      success: true,
+      order: {
+        orderId: updatedOrder.orderId,
+        status: updatedOrder.status,
+        refundProcessed: order.paymentMethod === 'Razorpay' && order.paymentStatus === 'paid'
+      },
+      message: 'Order cancelled successfully'
+    });
+  } catch (error) {
+    console.error('Error cancelling order:', error);
+    res.status(500).json({ success: false, message: 'Failed to cancel order' });
+  }
+});
+
+export default router;

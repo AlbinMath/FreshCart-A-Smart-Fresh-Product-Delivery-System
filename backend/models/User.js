@@ -7,6 +7,14 @@ const addressSchema = new mongoose.Schema({
     enum: ['home', 'work', 'other', 'permanent', 'staying'],
     default: 'home'
   },
+  name: {
+    type: String,
+    trim: true
+  },
+  phone: {
+    type: String,
+    trim: true
+  },
   house: {
     type: String,
     trim: true
@@ -14,6 +22,14 @@ const addressSchema = new mongoose.Schema({
   street: {
     type: String,
     required: true,
+    trim: true
+  },
+  address: {
+    type: String,
+    trim: true
+  },
+  landmark: {
+    type: String,
     trim: true
   },
   city: {
@@ -35,6 +51,18 @@ const addressSchema = new mongoose.Schema({
     type: String,
     default: 'India',
     trim: true
+  },
+  coordinates: {
+    lat: {
+      type: Number,
+      min: -90,
+      max: 90
+    },
+    lng: {
+      type: Number,
+      min: -180,
+      max: 180
+    }
   },
   isDefault: {
     type: Boolean,

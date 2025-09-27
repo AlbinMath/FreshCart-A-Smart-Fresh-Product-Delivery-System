@@ -1,65 +1,37 @@
-import Notification from '../models/Notification.js';
-import { getIO } from '../config/socket.js';
+import { apiService } from './apiService.js';
 
-class NotificationService {
-  static async createNotification({ uid, type, title, message, data = {} }) {
-    const notification = new Notification({
-      uid,
-      type,
-      title,
-      message,
-      data,
-      read: false
-    });
+// Client-side notification service functions
+export const getNotifications = async (page = 1, limit = 20, unreadOnly = false) => {
+  const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
+  if (unreadOnly) params.append('unreadOnly', 'true');
+  return await apiService.get(`/notifications?${params}`);
+};
 
-    await notification.save();
+export const markAsRead = async (notificationId) => {
+  return await apiService.put(`/notifications/${notificationId}/read`);
+};
 
-    // Emit real-time notification
-    const io = getIO();
-    if (io) {
-      io.to(`user_${uid}`).emit('notification', notification);
-    }
+export const markAllAsRead = async () => {
+  return await apiService.put('/notifications/mark-all-read');
+};
 
-    return notification;
-  }
+export const deleteNotification = async (notificationId) => {
+  return await apiService.delete(`/notifications/${notificationId}`);
+};
 
-  static async getUnreadCount(uid) {
-    return Notification.countDocuments({ uid, read: false });
-  }
+export const clearAllNotifications = async () => {
+  return await apiService.delete('/notifications/clear-all');
+};
 
-  static async markAsRead(notificationId, uid) {
-    return Notification.findOneAndUpdate(
-      { _id: notificationId, uid },
-      { $set: { read: true } },
-      { new: true }
-    );
-  }
+export const getNotificationStats = async () => {
+  return await apiService.get('/notifications/stats');
+};
 
-  static async markAllAsRead(uid) {
-    return Notification.updateMany(
-      { uid, read: false },
-      { $set: { read: true } }
-    );
-  }
+export const updateNotificationPreferences = async (preferences) => {
+  return await apiService.put('/notifications/preferences', preferences);
+};
 
-  static async getNotifications(uid, { limit = 10, page = 1 } = {}) {
-    const skip = (page - 1) * limit;
-    
-    const [notifications, total] = await Promise.all([
-      Notification.find({ uid })
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      Notification.countDocuments({ uid })
-    ]);
-
-    return {
-      notifications,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit)
-    };
-  }
-}
-
-export default NotificationService;
+export const getUnreadCount = async () => {
+  const stats = await getNotificationStats();
+  return stats.stats.unread;
+};

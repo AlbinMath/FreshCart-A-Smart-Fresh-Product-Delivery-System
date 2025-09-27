@@ -1,6 +1,8 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
 import cors from 'cors';
 import morgan from 'morgan';
 import { createServer } from 'http';
@@ -14,13 +16,21 @@ import productUploadRoutes from './routes/productUploadRoutes.js';
 import activityRoutes from './routes/activityRoutes.js';
 import walletRoutes from './routes/walletRoutes.js';
 import licenseRoutes from './routes/licenseRoutes.js';
-// Notifications feature removed
+import cartRoutes from './routes/cartRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
+//import notificationRoutes from './routes/notificationRoutes.js';
+import addressRoutes from './routes/addressRoutes.js';
+import orderRoutes from './routes/orderRoutes.js';
 import adminLicenseRoutes from './routes/adminLicenseRoutes.js';
 import { logActivity } from './middleware/activityLogger.js';
 import Activity from './models/Activity.js';
 import { initCronJobs } from './scripts/cronJobs.js';
 
-dotenv.config();
+console.log('🔧 Environment Variables Debug:');
+console.log('FIREBASE_PROJECT_ID:', process.env.FIREBASE_PROJECT_ID || 'NOT SET');
+console.log('FIREBASE_CLIENT_EMAIL:', process.env.FIREBASE_CLIENT_EMAIL ? 'SET' : 'NOT SET');
+console.log('FIREBASE_PRIVATE_KEY length:', process.env.FIREBASE_PRIVATE_KEY ? process.env.FIREBASE_PRIVATE_KEY.length : 'NOT SET');
+console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'SET' : 'NOT SET');
 
 const app = express();
 
@@ -60,10 +70,13 @@ app.use('/api/activities', activityRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/upload', productUploadRoutes);
 app.use('/api', productRoutes);
+app.use('/api', cartRoutes); // Cart routes
 app.use('/api/users', walletRoutes); // Wallet routes
 app.use('/api/license', licenseRoutes); // License routes
-// Notifications feature removed
-// app.use('/api/notifications', notificationRoutes);
+//app.use('/api/notifications', notificationRoutes); // Notification routes
+app.use('/api/addresses', addressRoutes); // Address routes
+app.use('/api/payment', paymentRoutes); // Payment routes
+app.use('/api/orders', orderRoutes); // Order routes
 app.use('/api/admin/licenses', adminLicenseRoutes); // Admin license management
 
 // Basic Route

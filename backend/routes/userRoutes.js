@@ -698,6 +698,60 @@ router.delete('/:uid/addresses/:addressId', async (req, res) => {
   }
 });
 
+// Set default address
+router.put('/:uid/addresses/:addressId/default', async (req, res) => {
+  try {
+    const { uid, addressId } = req.params;
+
+    const userDoc = await User.findOne({ uid }).select('role');
+    if (!userDoc) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Block sellers from setting default addresses
+    if (userDoc.role === 'seller') {
+      return res.status(403).json({ success: false, message: 'Sellers cannot set default addresses. Use profile storeAddress.' });
+    }
+
+    // Remove default flag from all addresses
+    await User.updateOne(
+      { uid },
+      { $set: { 'addresses.$[].isDefault': false } }
+    );
+
+    // Set the specified address as default
+    const user = await User.findOneAndUpdate(
+      {
+        uid,
+        'addresses._id': addressId
+      },
+      {
+        $set: { 'addresses.$.isDefault': true }
+      },
+      { new: true }
+    ).select('addresses');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User or address not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Default address updated successfully',
+      addresses: user.addresses
+    });
+
+  } catch (error) {
+    console.error('Set default address error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+});
+
 // Delete account (non-admin)
 router.delete('/:uid/delete', async (req, res) => {
   try {

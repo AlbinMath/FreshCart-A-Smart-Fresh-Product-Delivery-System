@@ -192,20 +192,49 @@ router.delete('/products/:id', requireSeller, async (req, res) => {
 // Get all approved products for customers (public endpoint)
 router.get('/public/products', async (req, res) => {
   try {
-    const sellers = await User.find({ role: 'seller', isActive: true }).select('uid sellerUniqueNumber name email');
+    const includeAll = String(req.query.includeAll || '').toLowerCase() === 'true';
+    const sellers = await User.find({
+      role: { $in: ['seller', 'store'] },
+      $or: [
+        { isActive: true },
+        { isActive: { $exists: false } } // include legacy users without isActive flag
+      ]
+    }).select('uid sellerUniqueNumber name email');
     
     let allProducts = [];
     
     for (const seller of sellers) {
       try {
         const ProductModel = getSellerProductModel(seller.sellerUniqueNumber || seller.uid);
-        // Only fetch admin-approved products
-        // Include all products (approved and rejected) for visibility, but rejected ones will be marked as unavailable
-        const products = await ProductModel.find({ status: { $in: ['approved', 'rejected'] } }).lean();
+        // Enforce approved and in-stock unless includeAll=true
+        const query = includeAll
+          ? {}
+          : {
+              $and: [
+                {
+                  $or: [
+                    { approvalStatus: 'approved' },
+                    { approvalStatus: 'approved', status: { $exists: true } } // legacy support
+                  ]
+                },
+                // Ensure numeric comparison for stock > 0 even if stored as string
+                {
+                  $expr: {
+                    $gt: [
+                      { $toInt: { $ifNull: ['$stock', 0] } },
+                      0
+                    ]
+                  }
+                }
+              ]
+            };
+        const products = await ProductModel.find(query).lean();
         
         // Add seller info to each product
         const productsWithSeller = products.map(product => ({
           ...product,
+          // Normalize stock to a number in the response to avoid UI issues
+          stock: Number(product.stock ?? 0),
           sellerInfo: {
             uid: seller.uid,
             name: seller.name,

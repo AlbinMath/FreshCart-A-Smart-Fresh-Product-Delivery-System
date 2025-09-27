@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { getLicenseStatus } from '../services/sellerService';
+import { getLicenseStatus } from '../../../backend/services/sellerService';
 
 // Gate that allows access only if seller license is approved.
 // Use it inside ProtectedRoute(allowedRoles=["store","seller"]).

@@ -4,7 +4,7 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import UpdateLicenseBanner from '../../components/UpdateLicenseBanner';
 import LicenseVerification from './LicenseVerification';
-import { getLicenseStatus } from '../../services/sellerService';
+import { getLicenseStatus } from '../../../../backend/services/sellerService';
 
 const SellerDashboard = () => {
   const { currentUser } = useAuth();

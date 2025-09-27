@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { validateProfileData, sanitizeInput } from "../utils/validation";
+import { validateProfileData, sanitizeInput } from "../../../backend/utils/validation";
 
 export default function ProfileSettings() {
   const { currentUser, getUserProfile, fetchUserProfile, updateUserProfile } = useAuth();
