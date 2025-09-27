@@ -37,3 +37,6 @@ Thumbs.db
 # Misc
 coverage/
 .npmrc
+
+.env
+.env.local
