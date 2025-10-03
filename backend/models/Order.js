@@ -37,13 +37,13 @@ const orderSchema = new mongoose.Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['COD', 'Razorpay'],
+    enum: ['COD', 'Razorpay', 'UPI', 'Wallet'],
     required: true
   },
   status: {
     type: String,
-    enum: ['Processing', 'Under Delivery', 'Completed', 'Cancelled'],
-    default: 'Processing'
+    enum: ['Pending Seller Approval', 'delivery_pending', 'approved', 'Processing', 'Under Delivery', 'Completed', 'Cancelled'],
+    default: 'Pending Seller Approval'
   },
   timestamp: {
     type: Date,
@@ -74,7 +74,13 @@ const orderSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     }
-  }]
+  }],
+  sellerApprovalDeadline: {
+    type: Date,
+    default: function() {
+      return new Date(Date.now() + 3 * 60 * 1000); // 3 minutes from now
+    }
+  }
 });
 
 // Create connection to ordersDB

@@ -41,6 +41,7 @@ import SellerProducts from "./pages/SellerProducts";
 import SellerStoreSettings from "./pages/SellerStoreSettings";
 import SellerSchedule from "./pages/SellerSchedule";
 import SellerLicenseUpload from "./pages/SellerLicenseUpload";
+import OrderProcessingPage from "./pages/seller/OrderProcessingPage";
 import LicenseVerification from "./pages/admin/LicenseVerification";
 import Wallet from "./pages/Wallet";
 import Cart from "./pages/Cart";
@@ -248,11 +249,21 @@ function AppContent() {
                     </ProtectedRoute>
                   }
                 />
-                <Route 
-                  path="/seller/license-upload" 
+                <Route
+                  path="/seller/license-upload"
                   element={
                     <ProtectedRoute allowedRoles={["store", "seller"]}>
                       <SellerLicenseUpload />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/seller/orders"
+                  element={
+                    <ProtectedRoute allowedRoles={["store", "seller"]}>
+                      <SellerLicenseGate>
+                        <OrderProcessingPage />
+                      </SellerLicenseGate>
                     </ProtectedRoute>
                   }
                 />

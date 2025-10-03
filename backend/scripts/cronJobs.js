@@ -6,11 +6,52 @@
 import cron from 'node-cron';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
+import Order from '../models/Order.js';
 import { getSellerProductModel } from '../models/Product.js';
 
 // time format: "0 0 * * *" -> at 00:00 every day
 // allow override via env CRON_RESET_STOCK (e.g., "0 3 * * *" for 03:00)
 const CRON_SCHEDULE = process.env.CRON_RESET_STOCK || '0 0 * * *';
+
+// Auto-reject orders not accepted by seller within 3 minutes
+function scheduleAutoRejectOrders() {
+  console.log('[CRON] Scheduling auto-reject orders every minute');
+  cron.schedule('* * * * *', async () => { // Every minute
+    if (mongoose.connection.readyState !== 1) {
+      console.warn('[CRON] MongoDB not connected. Skipping auto-reject orders.');
+      return;
+    }
+    try {
+      const now = new Date();
+      const expiredOrders = await Order.find({
+        status: 'Pending Seller Approval',
+        sellerApprovalDeadline: { $lt: now }
+      });
+
+      for (const order of expiredOrders) {
+        await Order.findOneAndUpdate(
+          { orderId: order.orderId },
+          {
+            status: 'Cancelled',
+            $push: {
+              statusTimeline: {
+                status: 'Auto-rejected: Seller did not respond within 3 minutes',
+                timestamp: new Date()
+              }
+            }
+          }
+        );
+        console.log(`[CRON] Auto-rejected order ${order.orderId}`);
+      }
+
+      if (expiredOrders.length > 0) {
+        console.log(`[CRON] Auto-rejected ${expiredOrders.length} orders`);
+      }
+    } catch (e) {
+      console.error('[CRON] Auto-reject orders failed:', e);
+    }
+  });
+}
 
 export function initCronJobs() {
   try {
@@ -39,6 +80,9 @@ export function initCronJobs() {
         console.error('[CRON] Daily stock reset failed:', e);
       }
     });
+
+    // Schedule auto-reject orders
+    scheduleAutoRejectOrders();
   } catch (e) {
     console.error('[CRON] Failed to schedule jobs:', e);
   }

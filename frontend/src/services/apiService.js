@@ -3,7 +3,7 @@
  * Handles all HTTP requests to the backend with consistent error handling and authentication
  */
 
-import { auth } from '../../frontend/src/firebase.js';
+import { auth } from '../firebase.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -50,137 +50,109 @@ class ApiService {
    * @returns {Promise<Object>} Parsed response data
    */
   async handleResponse(response) {
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || `HTTP error! status: ${response.status}`);
+    const contentType = response.headers.get('content-type');
+    let data;
+
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      data = await response.text();
     }
-    
+
+    if (!response.ok) {
+      const error = data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
+      throw new Error(error);
+    }
+
     return data;
   }
 
   /**
-   * Make GET request
+   * GET request
    * @param {string} endpoint - API endpoint
-   * @param {Object} options - Request options
+   * @param {Object} options - Additional options
    * @returns {Promise<Object>} Response data
    */
   async get(endpoint, options = {}) {
+    const headers = await this.getAuthHeaders();
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'GET',
-      headers: await this.getAuthHeaders(),
-      credentials: 'include',
+      headers: { ...headers, ...options.headers },
       ...options
     });
-
     return this.handleResponse(response);
   }
 
   /**
-   * Make POST request
+   * POST request
    * @param {string} endpoint - API endpoint
-   * @param {Object} data - Request body data
-   * @param {Object} options - Request options
+   * @param {Object} data - Request body
+   * @param {Object} options - Additional options
    * @returns {Promise<Object>} Response data
    */
   async post(endpoint, data = {}, options = {}) {
+    const headers = await this.getAuthHeaders();
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'POST',
-      headers: await this.getAuthHeaders(),
-      credentials: 'include',
+      headers: { ...headers, ...options.headers },
       body: JSON.stringify(data),
       ...options
     });
-
     return this.handleResponse(response);
   }
 
   /**
-   * Make PUT request
+   * PUT request
    * @param {string} endpoint - API endpoint
-   * @param {Object} data - Request body data
-   * @param {Object} options - Request options
+   * @param {Object} data - Request body
+   * @param {Object} options - Additional options
    * @returns {Promise<Object>} Response data
    */
   async put(endpoint, data = {}, options = {}) {
+    const headers = await this.getAuthHeaders();
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'PUT',
-      headers: await this.getAuthHeaders(),
-      credentials: 'include',
+      headers: { ...headers, ...options.headers },
       body: JSON.stringify(data),
       ...options
     });
-
     return this.handleResponse(response);
   }
 
   /**
-   * Make DELETE request
+   * DELETE request
    * @param {string} endpoint - API endpoint
-   * @param {Object} options - Request options
+   * @param {Object} options - Additional options
    * @returns {Promise<Object>} Response data
    */
   async delete(endpoint, options = {}) {
+    const headers = await this.getAuthHeaders();
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'DELETE',
-      headers: await this.getAuthHeaders(),
-      credentials: 'include',
+      headers: { ...headers, ...options.headers },
       ...options
     });
-
     return this.handleResponse(response);
   }
 
   /**
-   * Make request with UID header
-   * @param {string} method - HTTP method
+   * PATCH request
    * @param {string} endpoint - API endpoint
-   * @param {string} uid - User ID
-   * @param {Object} data - Request body data
+   * @param {Object} data - Request body
+   * @param {Object} options - Additional options
    * @returns {Promise<Object>} Response data
    */
-  async requestWithUid(method, endpoint, uid, data = null) {
-    const options = {
-      method: method.toUpperCase(),
-      headers: this.getUidHeaders(uid),
-      credentials: 'include'
-    };
-
-    if (data && (method.toUpperCase() === 'POST' || method.toUpperCase() === 'PUT')) {
-      options.body = JSON.stringify(data);
-    }
-
-    const response = await fetch(`${this.baseURL}${endpoint}`, options);
-    return this.handleResponse(response);
-  }
-
-  /**
-   * Upload file
-   * @param {string} endpoint - API endpoint
-   * @param {FormData} formData - Form data with file
-   * @param {Object} options - Request options
-   * @returns {Promise<Object>} Response data
-   */
-  async uploadFile(endpoint, formData, options = {}) {
-    const authHeaders = await this.getAuthHeaders();
-    const headers = {};
-
-    if (authHeaders.Authorization) {
-      headers['Authorization'] = authHeaders.Authorization;
-    }
-
+  async patch(endpoint, data = {}, options = {}) {
+    const headers = await this.getAuthHeaders();
     const response = await fetch(`${this.baseURL}${endpoint}`, {
-      method: 'POST',
-      headers,
-      credentials: 'include',
-      body: formData,
+      method: 'PATCH',
+      headers: { ...headers, ...options.headers },
+      body: JSON.stringify(data),
       ...options
     });
-
     return this.handleResponse(response);
   }
 }
 
-// Create and export singleton instance
-export const apiService = new ApiService();
+const apiService = new ApiService();
 export default apiService;

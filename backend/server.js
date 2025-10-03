@@ -18,7 +18,7 @@ import walletRoutes from './routes/walletRoutes.js';
 import licenseRoutes from './routes/licenseRoutes.js';
 import cartRoutes from './routes/cartRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
-//import notificationRoutes from './routes/notificationRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 import addressRoutes from './routes/addressRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import adminLicenseRoutes from './routes/adminLicenseRoutes.js';
@@ -73,7 +73,7 @@ app.use('/api', productRoutes);
 app.use('/api', cartRoutes); // Cart routes
 app.use('/api/users', walletRoutes); // Wallet routes
 app.use('/api/license', licenseRoutes); // License routes
-//app.use('/api/notifications', notificationRoutes); // Notification routes
+app.use('/api/notifications', notificationRoutes); // Notification routes
 app.use('/api/addresses', addressRoutes); // Address routes
 app.use('/api/payment', paymentRoutes); // Payment routes
 app.use('/api/orders', orderRoutes); // Order routes

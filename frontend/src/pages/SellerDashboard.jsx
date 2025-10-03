@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import EmailVerification from "../components/EmailVerification";
+import { toast } from "react-toastify";
+import apiService from "../services/apiService.js";
 
 // Minimal Store/Seller dashboard inspired by provided design
 export default function SellerDashboard() {
@@ -25,6 +27,13 @@ export default function SellerDashboard() {
     note: ""
   });
   const [hoursMsg, setHoursMsg] = useState("");
+
+  // Order processing state
+  const [pendingOrders, setPendingOrders] = useState([]);
+  const [acceptedOrders, setAcceptedOrders] = useState([]);
+  const [orderCountdowns, setOrderCountdowns] = useState({});
+  const [processingOrder, setProcessingOrder] = useState(null);
+  const [autoRejectingOrders, setAutoRejectingOrders] = useState(new Set());
   
   
   // Generate next 7 days starting from today
@@ -123,6 +132,171 @@ export default function SellerDashboard() {
     return storeHours.find(h => h.day === day);
   };
 
+  // Order processing functions
+  const fetchPendingOrders = async () => {
+    try {
+      const response = await apiService.get(`/orders/seller/pending/${currentUser.uid}`);
+      if (response.success) {
+        setPendingOrders(response.orders);
+
+        // Initialize countdowns for new orders
+        const newCountdowns = {};
+        response.orders.forEach(order => {
+          const timeLeft = getTimeLeft(order.createdAt);
+          newCountdowns[order._id] = timeLeft;
+        });
+        setOrderCountdowns(newCountdowns);
+      }
+    } catch (error) {
+      console.error('Error fetching pending orders:', error);
+      toast.error('Failed to fetch pending orders');
+    }
+  };
+
+  const fetchAcceptedOrders = async () => {
+    try {
+      const response = await apiService.get(`/orders/seller/accepted/${currentUser.uid}`);
+      if (response.success) {
+        setAcceptedOrders(response.orders);
+      }
+    } catch (error) {
+      console.error('Error fetching accepted orders:', error);
+      toast.error('Failed to fetch accepted orders');
+    }
+  };
+
+  const getTimeLeft = (createdAt) => {
+    const now = new Date();
+    const orderTime = new Date(createdAt);
+    const deadline = new Date(orderTime.getTime() + 3 * 60 * 1000); // 3 minutes
+    const diff = deadline - now;
+
+    if (diff <= 0) return { minutes: 0, seconds: 0, expired: true };
+
+    const minutes = Math.floor(diff / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    return { minutes, seconds, expired: false };
+  };
+
+  const updateCountdowns = () => {
+    setOrderCountdowns(prev => {
+      const updated = {};
+      Object.keys(prev).forEach(orderId => {
+        const order = pendingOrders.find(o => o._id === orderId);
+        if (order) {
+          const timeLeft = getTimeLeft(order.createdAt);
+          updated[orderId] = timeLeft;
+
+          // Auto-reject if expired and not already processing/rejecting
+          if (timeLeft.expired && !processingOrder && !autoRejectingOrders.has(orderId)) {
+            setAutoRejectingOrders(prev => new Set([...prev, orderId]));
+            handleRejectOrder(orderId);
+          }
+        }
+      });
+      return updated;
+    });
+  };
+
+  const handleAcceptOrder = async (orderId) => {
+    if (processingOrder) return;
+
+    setProcessingOrder(orderId);
+    try {
+      const response = await apiService.put(`/orders/seller/accept/${orderId}`, {
+        sellerId: currentUser.uid
+      });
+
+      if (response.success) {
+        toast.success('Order accepted successfully!');
+        // Refresh both lists
+        fetchPendingOrders();
+        fetchAcceptedOrders();
+        setOrderCountdowns(prev => {
+          const updated = { ...prev };
+          delete updated[orderId];
+          return updated;
+        });
+      } else {
+        toast.error(response.message || 'Failed to accept order');
+      }
+    } catch (error) {
+      console.error('Error accepting order:', error);
+      toast.error(error.message || 'Failed to accept order');
+    } finally {
+      setProcessingOrder(null);
+    }
+  };
+
+  const handleRejectOrder = async (orderId) => {
+    if (processingOrder) return;
+
+    setProcessingOrder(orderId);
+    try {
+      const response = await apiService.put(`/orders/seller/reject/${orderId}`, {
+        sellerId: currentUser.uid
+      });
+
+      if (response.success) {
+        toast.success('Order rejected successfully!');
+        // Remove from pending orders
+        setPendingOrders(prev => prev.filter(order => order._id !== orderId));
+        setOrderCountdowns(prev => {
+          const updated = { ...prev };
+          delete updated[orderId];
+          return updated;
+        });
+        setAutoRejectingOrders(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(orderId);
+          return newSet;
+        });
+      } else {
+        toast.error(response.message || 'Failed to reject order');
+        setAutoRejectingOrders(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(orderId);
+          return newSet;
+        });
+      }
+    } catch (error) {
+      console.error('Error rejecting order:', error);
+      toast.error(error.message || 'Failed to reject order');
+      setAutoRejectingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+    } finally {
+      setProcessingOrder(null);
+    }
+  };
+
+  const handleProcessOrder = async (orderId) => {
+    if (processingOrder) return;
+
+    setProcessingOrder(orderId);
+    try {
+      const response = await apiService.put(`/orders/seller/process/${orderId}`, {
+        sellerId: currentUser.uid
+      });
+
+      if (response.success) {
+        toast.success('Order processing started!');
+        // Refresh accepted orders
+        fetchAcceptedOrders();
+      } else {
+        toast.error(response.message || 'Failed to start processing order');
+      }
+    } catch (error) {
+      console.error('Error processing order:', error);
+      toast.error(error.message || 'Failed to start processing order');
+    } finally {
+      setProcessingOrder(null);
+    }
+  };
+
   useEffect(() => {
     if (!currentUser) {
       navigate("/login");
@@ -173,8 +347,20 @@ export default function SellerDashboard() {
       } catch {}
       // Load store hours
       loadStoreHours();
+      // Load pending orders
+      fetchPendingOrders();
+      // Load accepted orders
+      fetchAcceptedOrders();
     })();
   }, [currentUser, navigate, location.search]);
+
+  // Update countdowns every second
+  useEffect(() => {
+    if (pendingOrders.length > 0) {
+      const interval = setInterval(updateCountdowns, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [pendingOrders]);
 
   // Load store hours from database
   async function loadStoreHours() {
@@ -885,6 +1071,219 @@ export default function SellerDashboard() {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : activeTab === 'orders' ? (
+          /* Order Processing View */
+          <div className="max-w-7xl mx-auto px-6 pb-12">
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold">Order Processing</h2>
+                <button
+                  onClick={() => navigate('seller/OrderProcessingPage.jsx')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Full Processing Page →
+                </button>
+              </div>
+
+              {/* Pending Orders Section */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Pending Orders - Action Required</h3>
+                  <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">
+                    {pendingOrders.length} pending
+                  </span>
+                </div>
+
+                {pendingOrders.length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg">
+                    <div className="text-gray-500 mb-2">No pending orders</div>
+                    <div className="text-sm text-gray-400">Orders requiring your approval will appear here</div>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {pendingOrders.slice(0, 3).map((order) => {
+                      const countdown = orderCountdowns[order._id] || { minutes: 0, seconds: 0, expired: true };
+                      const isProcessing = processingOrder === order._id;
+                      const totalItems = order.products?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+
+                      return (
+                        <div key={order._id} className="border rounded-lg p-4 bg-white shadow-sm">
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-semibold text-gray-900">#{order.orderNumber || order._id.slice(-6)}</span>
+                                <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Pending Approval</span>
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {order.customerInfo?.name || 'Customer'} • {totalItems} items
+                              </div>
+                            </div>
+
+                            {/* Countdown Timer */}
+                            <div className="text-right">
+                              <div className={`text-sm font-mono ${
+                                countdown.expired ? 'text-red-600' : countdown.minutes === 0 && countdown.seconds <= 30 ? 'text-orange-600' : 'text-green-600'
+                              }`}>
+                                {countdown.expired ? 'EXPIRED' : `${countdown.minutes}:${countdown.seconds.toString().padStart(2, '0')}`}
+                              </div>
+                              <div className="text-xs text-gray-500">Time left</div>
+                            </div>
+                          </div>
+
+                          {/* Order Items Preview */}
+                          <div className="mb-3">
+                            <div className="flex gap-2 overflow-x-auto pb-2">
+                              {order.products?.slice(0, 3).map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded px-2 py-1 min-w-max">
+                                  {item.image && (
+                                    <img
+                                      src={item.image}
+                                      alt={item.name}
+                                      className="w-6 h-6 object-cover rounded"
+                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    />
+                                  )}
+                                  <span className="text-xs text-gray-700">{item.name}</span>
+                                  <span className="text-xs text-gray-500">x{item.quantity}</span>
+                                </div>
+                              ))}
+                              {order.products?.length > 3 && (
+                                <div className="text-xs text-gray-500 px-2 py-1">
+                                  +{order.products.length - 3} more
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Order Summary */}
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="text-sm text-gray-600">
+                              Total: <span className="font-semibold text-green-600">₹{order.totalAmount || 0}</span>
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              Delivery: <span className="font-medium">₹{order.deliveryFee || 0}</span>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex justify-center">
+                            <button
+                              onClick={() => handleAcceptOrder(order._id)}
+                              disabled={countdown.expired || isProcessing}
+                              className={`px-8 py-2 rounded-lg text-sm font-medium ${
+                                countdown.expired || isProcessing
+                                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                  : 'bg-green-600 text-white hover:bg-green-700'
+                              }`}
+                            >
+                              {isProcessing ? 'Processing...' : 'Accept Order'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Pending Delivery Orders Section */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Pending Delivery Orders</h3>
+                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                    {acceptedOrders.length} pending delivery
+                  </span>
+                </div>
+
+                {acceptedOrders.length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg">
+                    <div className="text-gray-500 mb-2">No accepted orders</div>
+                    <div className="text-sm text-gray-400">Accepted orders will appear here for delivery</div>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {acceptedOrders.slice(0, 3).map((order) => {
+                      const totalItems = order.products?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+
+                      return (
+                        <div key={order._id} className="border rounded-lg p-4 bg-white shadow-sm">
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-semibold text-gray-900">#{order.orderNumber || order._id.slice(-6)}</span>
+                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Processing</span>
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {order.customerInfo?.name || 'Customer'} • {totalItems} items
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Order Items Preview */}
+                          <div className="mb-3">
+                            <div className="flex gap-2 overflow-x-auto pb-2">
+                              {order.products?.slice(0, 3).map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded px-2 py-1 min-w-max">
+                                  {item.image && (
+                                    <img
+                                      src={item.image}
+                                      alt={item.name}
+                                      className="w-6 h-6 object-cover rounded"
+                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    />
+                                  )}
+                                  <span className="text-xs text-gray-700">{item.name}</span>
+                                  <span className="text-xs text-gray-500">x{item.quantity}</span>
+                                </div>
+                              ))}
+                              {order.products?.length > 3 && (
+                                <div className="text-xs text-gray-500 px-2 py-1">
+                                  +{order.products.length - 3} more
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Order Summary */}
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="text-sm text-gray-600">
+                              Total: <span className="font-semibold text-green-600">₹{order.totalAmount || 0}</span>
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              Delivery: <span className="font-medium">₹{order.deliveryFee || 0}</span>
+                            </div>
+                          </div>
+
+                          {/* Delivery Status or Action */}
+                          <div className="text-center">
+                            <button
+                              onClick={() => handleProcessOrder(order._id)}
+                              disabled={processingOrder === order._id}
+                              className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                            >
+                              {processingOrder === order._id ? 'Processing...' : 'Start Processing'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-blue-50 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-blue-600">{pendingOrders.length}</div>
+                  <div className="text-sm text-blue-800">Pending Approval</div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-green-600">{acceptedOrders.length}</div>
+                  <div className="text-sm text-green-800">Pending Delivery</div>
                 </div>
               </div>
             </div>

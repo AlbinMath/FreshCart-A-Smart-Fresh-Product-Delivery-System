@@ -33,19 +33,30 @@ export default function PaymentPage() {
       setError(null);
 
       const storeDetails = cartItems.length > 0 ? {
-        sellerUid: cartItems[0].sellerUid,
+        sellerId: cartItems[0].sellerUid,
         sellerCollection: cartItems[0].sellerCollection
       } : {};
 
+      // Map cart items to match Order model schema
+      const mappedProducts = cartItems.map(item => ({
+        id: item._id || item.id,
+        name: item.productName,
+        price: item.price,
+        quantity: item.quantity,
+        image: item.productImage,
+        isVeg: item.isVeg || false
+      }));
+
       const orderData = {
         userId: currentUser.uid,
-        products: cartItems,
+        products: mappedProducts,
         subtotal,
         deliveryFee,
         totalAmount: total,
         paymentMethod,
         deliveryAddress: selectedAddress,
-        storeDetails
+        storeDetails,
+        cartItems: cartItems // Keep original for payment record
       };
 
       if (paymentMethod === 'COD') {

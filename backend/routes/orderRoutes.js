@@ -3,8 +3,10 @@ import Razorpay from 'razorpay';
 import Order from '../models/Order.js';
 import Payment from '../models/Payment.js';
 import User from '../models/User.js';
+import Notification from '../models/Notification.js';
 import crypto from 'crypto';
 import { calculateTotal } from '../utils/deliveryUtils.js';
+import { getSellerProductModel } from '../models/Product.js';
 
 const router = express.Router();
 
@@ -19,7 +21,7 @@ router.post('/create', async (req, res) => {
   try {
     const { userId, products, subtotal, deliveryFee, totalAmount, paymentMethod, deliveryAddress, storeDetails, cartItems } = req.body;
 
-    if (!userId || !products || !subtotal || !deliveryFee || !totalAmount || !paymentMethod || !deliveryAddress || !storeDetails) {
+    if (!userId || !products || !Array.isArray(products) || products.length === 0 || typeof subtotal !== 'number' || typeof deliveryFee !== 'number' || typeof totalAmount !== 'number' || !paymentMethod || !deliveryAddress || !storeDetails) {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
@@ -52,6 +54,7 @@ router.post('/create', async (req, res) => {
       // Create order directly for COD
       const order = new Order({
         ...orderData,
+        status: 'Pending Seller Approval',
         paymentStatus: 'pending' // For COD, payment is pending until delivery
       });
 
@@ -84,7 +87,7 @@ router.post('/create', async (req, res) => {
         orderId: order.orderId,
         message: 'Order placed successfully'
       });
-    } else if (paymentMethod === 'Razorpay') {
+    } else if (['Razorpay', 'UPI', 'Wallet'].includes(paymentMethod)) {
       // Create Razorpay order
       const options = {
         amount: totalAmount * 100, // Razorpay expects amount in paisa
@@ -98,6 +101,7 @@ router.post('/create', async (req, res) => {
       // Save order with razorpay details
       const order = new Order({
         ...orderData,
+        status: 'Pending Seller Approval',
         razorpayOrderId: razorpayOrder.id,
         paymentStatus: 'pending'
       });
@@ -163,10 +167,9 @@ router.post('/verify-payment', async (req, res) => {
         {
           razorpayPaymentId: razorpay_payment_id,
           paymentStatus: 'paid',
-          status: 'Processing',
           $push: {
             statusTimeline: {
-              status: 'Order Confirmed',
+              status: 'Payment Confirmed',
               timestamp: new Date()
             }
           }
@@ -255,7 +258,7 @@ router.get('/list/:userId', async (req, res) => {
 
     // Group orders by status
     const groupedOrders = {
-      processing: orders.filter(order => order.status === 'Processing'),
+      processing: orders.filter(order => order.status === 'Pending Seller Approval' || order.status === 'Processing' || order.status === 'delivery_pending'),
       underDelivery: orders.filter(order => order.status === 'Under Delivery'),
       completed: orders.filter(order => order.status === 'Completed'),
       cancelled: orders.filter(order => order.status === 'Cancelled')
@@ -321,10 +324,10 @@ router.put('/cancel/:orderId', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    if (order.status !== 'Processing') {
+    if (order.status !== 'Processing' && order.status !== 'Pending Seller Approval') {
       return res.status(400).json({
         success: false,
-        message: 'Order cannot be cancelled. Only processing orders can be cancelled.'
+        message: 'Order cannot be cancelled. Only pending or processing orders can be cancelled.'
       });
     }
 
@@ -394,6 +397,236 @@ router.put('/cancel/:orderId', async (req, res) => {
   } catch (error) {
     console.error('Error cancelling order:', error);
     res.status(500).json({ success: false, message: 'Failed to cancel order' });
+  }
+});
+
+// Get pending orders for seller
+router.get('/seller/pending/:sellerId', async (req, res) => {
+  try {
+    const { sellerId } = req.params;
+    const orders = await Order.find({
+      'storeDetails.sellerId': sellerId,
+      status: 'Pending Seller Approval'
+    }).sort({ timestamp: -1 });
+
+    res.json({
+      success: true,
+      orders
+    });
+  } catch (error) {
+    console.error('Error fetching seller pending orders:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch orders' });
+  }
+});
+
+// Accept order by seller
+router.put('/seller/accept/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { sellerId } = req.body; // For verification
+
+    const order = await Order.findOne({ _id: orderId, 'storeDetails.sellerId': sellerId });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (order.status !== 'Pending Seller Approval') {
+      return res.status(400).json({ success: false, message: 'Order is not pending approval' });
+    }
+
+    // Check if deadline passed
+    if (new Date() > order.sellerApprovalDeadline) {
+      return res.status(400).json({ success: false, message: 'Approval deadline has passed' });
+    }
+
+    // Update order status
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: orderId },
+      {
+        status: 'delivery_pending',
+        $push: {
+          statusTimeline: {
+            status: 'Accepted by Seller',
+            timestamp: new Date()
+          }
+        }
+      },
+      { new: true }
+    );
+
+    // Update seller wallet
+    const sellerEarnings = order.subtotal; // Seller gets the subtotal, platform gets delivery fee
+
+    await User.findOneAndUpdate(
+      { uid: sellerId },
+      {
+        $inc: { balance: sellerEarnings },
+        $push: {
+          walletTransactions: {
+            type: 'credit',
+            amount: sellerEarnings,
+            description: `Earnings from order ${orderId}`,
+            reference: `ORDER_${orderId}`,
+            status: 'completed'
+          }
+        }
+      }
+    );
+
+    // Update product stocks
+    const ProductModel = getSellerProductModel(sellerId);
+    for (const product of order.products) {
+      await ProductModel.findByIdAndUpdate(
+        product.id,
+        { $inc: { stock: -product.quantity } }
+      );
+    }
+
+    // Notify customer about acceptance
+    await Notification.create({
+      userId: order.userId,
+      type: 'order',
+      title: 'Order Accepted',
+      message: `Your order has been accepted by the seller and is now pending delivery.`,
+      data: {
+        orderId
+      }
+    });
+
+    res.json({
+      success: true,
+      order: updatedOrder,
+      message: 'Order accepted successfully'
+    });
+  } catch (error) {
+    console.error('Error accepting order:', error);
+    res.status(500).json({ success: false, message: 'Failed to accept order' });
+  }
+});
+
+// Reject order by seller
+router.put('/seller/reject/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { sellerId } = req.body; // For verification
+
+    const order = await Order.findOne({ _id: orderId, 'storeDetails.sellerId': sellerId });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (order.status !== 'Pending Seller Approval') {
+      return res.status(400).json({ success: false, message: 'Order is not pending approval' });
+    }
+
+    // Update order status to cancelled
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: orderId },
+      {
+        status: 'Cancelled',
+        $push: {
+          statusTimeline: {
+            status: 'Rejected by Seller',
+            timestamp: new Date()
+          }
+        }
+      },
+      { new: true }
+    );
+
+    // Notify customer about rejection
+    await Notification.create({
+      userId: order.userId,
+      type: 'order',
+      title: 'Order Rejected',
+      message: `Your order ${orderId} has been rejected by the seller.`,
+      data: {
+        orderId,
+        reason: 'Rejected by seller'
+      }
+    });
+
+    res.json({
+      success: true,
+      order: updatedOrder,
+      message: 'Order rejected successfully'
+    });
+  } catch (error) {
+    console.error('Error rejecting order:', error);
+    res.status(500).json({ success: false, message: 'Failed to reject order' });
+  }
+});
+
+// Get accepted (seller approval) orders for seller
+router.get('/seller/accepted/:sellerId', async (req, res) => {
+  try {
+    const { sellerId } = req.params;
+    const orders = await Order.find({
+      'storeDetails.sellerId': sellerId,
+      status: 'delivery_pending'
+    }).sort({ timestamp: -1 });
+
+    res.json({
+      success: true,
+      orders
+    });
+  } catch (error) {
+    console.error('Error fetching seller accepted orders:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch orders' });
+  }
+});
+
+// Process order (set to Processing status) by seller
+router.put('/seller/process/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { sellerId } = req.body;
+
+    const order = await Order.findOne({ _id: orderId, 'storeDetails.sellerId': sellerId });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (order.status !== 'delivery_pending') {
+      return res.status(400).json({ success: false, message: 'Order is not pending delivery' });
+    }
+
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: orderId },
+      {
+        status: 'Processing',
+        $push: {
+          statusTimeline: {
+            status: 'Order Processing Started',
+            timestamp: new Date()
+          }
+        }
+      },
+      { new: true }
+    );
+
+    // Notify customer about processing start
+    await Notification.create({
+      userId: order.userId,
+      type: 'order',
+      title: 'Order Processing Started',
+      message: `Your order ${orderId} is now being processed by the seller.`,
+      data: {
+        orderId
+      }
+    });
+
+    res.json({
+      success: true,
+      order: updatedOrder,
+      message: 'Order processing started successfully'
+    });
+  } catch (error) {
+    console.error('Error processing order:', error);
+    res.status(500).json({ success: false, message: 'Failed to process order' });
   }
 });
 
