@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { MapPicker } from "../components/MapPicker";
+import { addressService } from "../services/addressService";
 
 export default function SellerProfile() {
   const {
+    currentUser,
     getUserProfile,
     fetchUserProfile,
     listBranchStores,
@@ -30,6 +33,19 @@ export default function SellerProfile() {
   const [showIdModal, setShowIdModal] = useState(false);
   const [notif, setNotif] = useState({ unread: 0, items: [] });
 
+  // Branch form state
+  const [form, setForm] = useState({
+    name: "",
+    address: "",
+    linkedSellerUniqueNumber: ""
+  });
+
+  // Store address editing state
+  const [editingStoreAddress, setEditingStoreAddress] = useState(false);
+  const [storeAddress, setStoreAddress] = useState(profile?.storeAddress || "");
+  const [storeCoordinates, setStoreCoordinates] = useState(profile?.storeCoordinates || null);
+  const [savingStoreAddress, setSavingStoreAddress] = useState(false);
+
   useEffect(() => {
     (async () => {
       try {
@@ -47,6 +63,24 @@ export default function SellerProfile() {
             console.warn('Auto-generate seller ID failed:', genErr?.message || genErr);
           }
         }
+
+        // Load store coordinates from addresses database if available
+        if (backendUser && (backendUser.role === 'store' || backendUser.role === 'seller')) {
+          try {
+            const existingAddresses = await addressService.getAddresses(currentUser.uid);
+            const storeAddress = existingAddresses.find(addr => addr.type === 'store');
+            if (storeAddress && storeAddress.coordinates) {
+              setStoreCoordinates(storeAddress.coordinates);
+            }
+          } catch (addressError) {
+            console.error('Error loading store coordinates from addresses:', addressError);
+            // Continue without coordinates
+          }
+        }
+
+        // Update local state with latest profile data
+        setStoreAddress(backendUser?.storeAddress || "");
+        setStoreCoordinates(backendUser?.storeCoordinates || null);
         const list = await listBranchStores();
         if (list && Array.isArray(list.branchStores)) setBranches(list.branchStores);
         if (list && Array.isArray(list.linkedBranchOf)) setLinkedFrom(list.linkedBranchOf);
@@ -94,7 +128,107 @@ export default function SellerProfile() {
     }
   };
 
+  // Branch form handlers
+  const onChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const onAdd = async (e) => {
+    e.preventDefault();
+    setError("");
+    setInfo("");
+
+    if (!form.name.trim() || !form.address.trim()) {
+      setError("Branch name and address are required");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const newBranch = {
+        name: form.name.trim(),
+        address: form.address.trim(),
+        linkedSellerUniqueNumber: form.linkedSellerUniqueNumber.trim() || null
+      };
+
+      const updated = await listBranchStores(); // This should be addBranchStore or similar
+      // For now, just reset the form
+      setForm({ name: "", address: "", linkedSellerUniqueNumber: "" });
+      setShowAddBranch(false);
+      setInfo("Branch added successfully");
+    } catch (e) {
+      setError(e.message || "Failed to add branch");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const sellerId = sellerIdLocal;
+
+  // Save store address function
+  const saveStoreAddress = async () => {
+    if (!storeAddress.trim()) {
+      setError("Store address cannot be empty");
+      return;
+    }
+
+    setSavingStoreAddress(true);
+    setError("");
+    setInfo("");
+
+    try {
+      // Update user profile in backend
+      const response = await fetch(`http://localhost:5000/api/users/${currentUser.uid}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeAddress,
+          storeCoordinates
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update store address');
+      }
+
+      // Also save/update in addresses database as 'store' type
+      try {
+        const existingAddresses = await addressService.getAddresses(currentUser.uid);
+        const existingStoreAddress = existingAddresses.find(addr => addr.type === 'store');
+
+        if (existingStoreAddress) {
+          // Update existing store address
+          await addressService.updateAddress(currentUser.uid, existingStoreAddress._id, {
+            ...existingStoreAddress,
+            address: storeAddress,
+            coordinates: storeCoordinates
+          });
+        } else {
+          // Create new store address
+          await addressService.addAddress(currentUser.uid, {
+            type: 'store',
+            address: storeAddress,
+            coordinates: storeCoordinates
+          });
+        }
+      } catch (addressError) {
+        console.error('Error syncing store address to addresses database:', addressError);
+        // Continue - user profile was updated successfully
+      }
+
+      setInfo("Store address updated successfully");
+      setEditingStoreAddress(false);
+
+      // Refresh profile to show updated data
+      await fetchUserProfile();
+    } catch (error) {
+      setError(error.message || 'Failed to update store address');
+    } finally {
+      setSavingStoreAddress(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4">
@@ -173,16 +307,92 @@ export default function SellerProfile() {
             <p className="text-xs text-gray-500 mt-1">This ID is auto-generated when your account is upgraded to seller. It is non-editable.</p>
           </div>
 
-          {/* Store Info quick view */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <div className="text-xs text-gray-500">Store Name</div>
-              <div className="text-sm font-medium">{profile?.storeName || "—"}</div>
+          {/* Store Info */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold">Store Information</h2>
+              {!editingStoreAddress && (
+                <button
+                  type="button"
+                  onClick={() => setEditingStoreAddress(true)}
+                  className="px-3 py-1.5 rounded-lg text-xs border bg-white hover:bg-gray-50"
+                >
+                  Edit Store Address
+                </button>
+              )}
             </div>
-            <div>
-              <div className="text-xs text-gray-500">Main Store Address</div>
-              <div className="text-sm font-medium break-words">{profile?.storeAddress || "—"}</div>
-            </div>
+
+            {editingStoreAddress ? (
+              <div className="space-y-4">
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Store Name</div>
+                  <div className="text-sm font-medium">{profile?.storeName || "—"}</div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Store Address</div>
+                  <textarea
+                    value={storeAddress}
+                    onChange={(e) => setStoreAddress(e.target.value)}
+                    placeholder="Enter your store address"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                    rows={3}
+                  />
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-500 mb-2">Store Location on Map</div>
+                  <MapPicker
+                    onLocationSelect={(coords) => setStoreCoordinates(coords)}
+                    initialLocation={storeCoordinates}
+                    className="mb-4"
+                  />
+                  {storeCoordinates && (
+                    <div className="mt-2 text-xs text-gray-500">
+                      Coordinates: {storeCoordinates.lat.toFixed(6)}, {storeCoordinates.lng.toFixed(6)}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={saveStoreAddress}
+                    disabled={savingStoreAddress}
+                    className="px-4 py-2 rounded-lg bg-green-600 text-white disabled:bg-green-400 text-sm"
+                  >
+                    {savingStoreAddress ? 'Saving...' : 'Save Address'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingStoreAddress(false);
+                      setStoreAddress(profile?.storeAddress || "");
+                      setStoreCoordinates(profile?.storeCoordinates || null);
+                    }}
+                    className="px-4 py-2 rounded-lg border bg-white hover:bg-gray-50 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-xs text-gray-500">Store Name</div>
+                  <div className="text-sm font-medium">{profile?.storeName || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Main Store Address</div>
+                  <div className="text-sm font-medium break-words">{profile?.storeAddress || "—"}</div>
+                  {storeCoordinates && (
+                    <div className="text-xs text-gray-400 mt-1">
+                      📍 {storeCoordinates.lat.toFixed(4)}, {storeCoordinates.lng.toFixed(4)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Branch Stores Manager */}

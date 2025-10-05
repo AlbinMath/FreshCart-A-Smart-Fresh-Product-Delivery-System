@@ -42,6 +42,7 @@ import SellerStoreSettings from "./pages/SellerStoreSettings";
 import SellerSchedule from "./pages/SellerSchedule";
 import SellerLicenseUpload from "./pages/SellerLicenseUpload";
 import OrderProcessingPage from "./pages/seller/OrderProcessingPage";
+import OrderFullProcessingPage from "./pages/seller/OrderFullProcessingPage";
 import LicenseVerification from "./pages/admin/LicenseVerification";
 import Wallet from "./pages/Wallet";
 import Cart from "./pages/Cart";
@@ -268,6 +269,16 @@ function AppContent() {
                   }
                 />
                 <Route
+                  path="/seller/order-processing/:orderId"
+                  element={
+                    <ProtectedRoute allowedRoles={["store", "seller"]}>
+                      <SellerLicenseGate>
+                        <OrderFullProcessingPage />
+                      </SellerLicenseGate>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/wallet"
                   element={
                     <ProtectedRoute allowedRoles={["customer", "store", "seller", "delivery", "admin"]}>
@@ -294,7 +305,7 @@ function AppContent() {
                 <Route
                   path="/add-address"
                   element={
-                    <ProtectedRoute allowedRoles={["customer"]}>
+                    <ProtectedRoute allowedRoles={["customer", "delivery"]}>
                       <AddAddressPage />
                     </ProtectedRoute>
                   }

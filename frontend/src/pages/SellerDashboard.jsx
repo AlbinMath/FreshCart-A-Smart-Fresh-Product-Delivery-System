@@ -273,6 +273,30 @@ export default function SellerDashboard() {
     }
   };
 
+  const handleReadyForDelivery = async (orderId) => {
+    if (processingOrder) return;
+
+    setProcessingOrder(orderId);
+    try {
+      const response = await apiService.put(`/orders/seller/ready-delivery/${orderId}`, {
+        sellerId: currentUser.uid
+      });
+
+      if (response.success) {
+        toast.success('Order marked as ready for delivery!');
+        // Refresh accepted orders
+        fetchAcceptedOrders();
+      } else {
+        toast.error(response.message || 'Failed to mark order ready for delivery');
+      }
+    } catch (error) {
+      console.error('Error marking order ready for delivery:', error);
+      toast.error(error.message || 'Failed to mark order ready for delivery');
+    } finally {
+      setProcessingOrder(null);
+    }
+  };
+
   const handleProcessOrder = async (orderId) => {
     if (processingOrder) return;
 
@@ -1081,12 +1105,7 @@ export default function SellerDashboard() {
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-semibold">Order Processing</h2>
-                <button
-                  onClick={() => navigate('seller/OrderProcessingPage.jsx')}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Full Processing Page →
-                </button>
+                
               </div>
 
               {/* Pending Orders Section */}
@@ -1190,23 +1209,23 @@ export default function SellerDashboard() {
                 )}
               </div>
 
-              {/* Pending Delivery Orders Section */}
+              {/* Active Orders Section */}
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Pending Delivery Orders</h3>
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                    {acceptedOrders.length} pending delivery
+                  <h3 className="text-lg font-semibold text-gray-900">Active Orders</h3>
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                    {acceptedOrders.filter(order => order.status === 'delivery_pending').length} active
                   </span>
                 </div>
 
-                {acceptedOrders.length === 0 ? (
+                {acceptedOrders.filter(order => order.status === 'delivery_pending').length === 0 ? (
                   <div className="text-center py-12 bg-gray-50 rounded-lg">
-                    <div className="text-gray-500 mb-2">No accepted orders</div>
-                    <div className="text-sm text-gray-400">Accepted orders will appear here for delivery</div>
+                    <div className="text-gray-500 mb-2">No active orders</div>
+                    <div className="text-sm text-gray-400">Accepted orders will appear here</div>
                   </div>
                 ) : (
                   <div className="grid gap-4">
-                    {acceptedOrders.slice(0, 3).map((order) => {
+                    {acceptedOrders.filter(order => order.status === 'delivery_pending').slice(0, 3).map((order) => {
                       const totalItems = order.products?.reduce((sum, item) => sum + item.quantity, 0) || 0;
 
                       return (
@@ -1215,7 +1234,7 @@ export default function SellerDashboard() {
                             <div>
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="text-sm font-semibold text-gray-900">#{order.orderNumber || order._id.slice(-6)}</span>
-                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Processing</span>
+                                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Active</span>
                               </div>
                               <div className="text-sm text-gray-600">
                                 {order.customerInfo?.name || 'Customer'} • {totalItems} items
@@ -1258,14 +1277,14 @@ export default function SellerDashboard() {
                             </div>
                           </div>
 
-                          {/* Delivery Status or Action */}
+                          {/* Action Button */}
                           <div className="text-center">
                             <button
-                              onClick={() => handleProcessOrder(order._id)}
+                              onClick={() => handleReadyForDelivery(order._id)}
                               disabled={processingOrder === order._id}
-                              className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                              className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
                             >
-                              {processingOrder === order._id ? 'Processing...' : 'Start Processing'}
+                              {processingOrder === order._id ? 'Processing...' : 'Ready to Delivery'}
                             </button>
                           </div>
                         </div>
@@ -1275,14 +1294,107 @@ export default function SellerDashboard() {
                 )}
               </div>
 
+              {/* Pending Delivery Orders Section */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Pending Delivery Orders</h3>
+                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                    {acceptedOrders.filter(order => order.status === 'ready_for_delivery').length} pending delivery
+                  </span>
+                </div>
+
+                {acceptedOrders.filter(order => order.status === 'ready_for_delivery').length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg">
+                    <div className="text-gray-500 mb-2">No orders ready for delivery</div>
+                    <div className="text-sm text-gray-400">Orders marked as ready for delivery will appear here</div>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {acceptedOrders.filter(order => order.status === 'ready_for_delivery').slice(0, 3).map((order) => {
+                      const totalItems = order.products?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+
+                      return (
+                        <div
+                          key={order._id}
+                          className="border rounded-lg p-4 bg-white shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                          onClick={() => navigate(`/seller/order-processing/${order._id}`)}
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-semibold text-gray-900">#{order.orderNumber || order._id.slice(-6)}</span>
+                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Ready for Delivery</span>
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {order.customerInfo?.name || 'Customer'} • {totalItems} items
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Order Items Preview */}
+                          <div className="mb-3">
+                            <div className="flex gap-2 overflow-x-auto pb-2">
+                              {order.products?.slice(0, 3).map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded px-2 py-1 min-w-max">
+                                  {item.image && (
+                                    <img
+                                      src={item.image}
+                                      alt={item.name}
+                                      className="w-6 h-6 object-cover rounded"
+                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    />
+                                  )}
+                                  <span className="text-xs text-gray-700">{item.name}</span>
+                                  <span className="text-xs text-gray-500">x{item.quantity}</span>
+                                </div>
+                              ))}
+                              {order.products?.length > 3 && (
+                                <div className="text-xs text-gray-500 px-2 py-1">
+                                  +{order.products.length - 3} more
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Order Summary */}
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="text-sm text-gray-600">
+                              Total: <span className="font-semibold text-green-600">₹{order.totalAmount || 0}</span>
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              Delivery: <span className="font-medium">₹{order.deliveryFee || 0}</span>
+                            </div>
+                          </div>
+
+                          {/* OTP Section */}
+                          <div className="mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                            <div className="text-sm font-medium text-yellow-800 mb-2">Delivery OTP</div>
+                            <div className="text-lg font-mono font-bold text-yellow-900 bg-yellow-100 px-3 py-2 rounded text-center">
+                              {order.deliveryOTP || 'OTP will be generated when processing starts'}
+                            </div>
+                          </div>
+
+                         
+                          
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               {/* Quick Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-orange-50 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-orange-600">{pendingOrders.length}</div>
+                  <div className="text-sm text-orange-800">Pending Approval</div>
+                </div>
                 <div className="bg-blue-50 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-blue-600">{pendingOrders.length}</div>
-                  <div className="text-sm text-blue-800">Pending Approval</div>
+                  <div className="text-2xl font-bold text-blue-600">{acceptedOrders.filter(order => order.status === 'delivery_pending').length}</div>
+                  <div className="text-sm text-blue-800">Active Orders</div>
                 </div>
                 <div className="bg-green-50 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-green-600">{acceptedOrders.length}</div>
+                  <div className="text-2xl font-bold text-green-600">{acceptedOrders.filter(order => order.status === 'ready_for_delivery').length}</div>
                   <div className="text-sm text-green-800">Pending Delivery</div>
                 </div>
               </div>

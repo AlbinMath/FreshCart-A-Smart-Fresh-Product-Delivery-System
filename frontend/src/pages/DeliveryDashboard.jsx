@@ -7,14 +7,20 @@ export default function DeliveryDashboard() {
   const { currentUser, getUserProfile, logout } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("dashboard");
-  
+
+  // Orders state
+  const [availableOrders, setAvailableOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [storeOverviewOrders, setStoreOverviewOrders] = useState([]);
+  const [loadingStoreOrders, setLoadingStoreOrders] = useState(false);
+
   // Schedule management state
   const [scheduleItems, setScheduleItems] = useState([]);
-  const [scheduleForm, setScheduleForm] = useState({ 
-    date: "", 
-    start: "", 
-    end: "", 
-    note: "" 
+  const [scheduleForm, setScheduleForm] = useState({
+    date: "",
+    start: "",
+    end: "",
+    note: ""
   });
   const [scheduleMsg, setScheduleMsg] = useState("");
 
@@ -29,7 +35,41 @@ export default function DeliveryDashboard() {
       return;
     }
     loadSchedule();
+    loadAvailableOrders();
+    loadStoreOverviewOrders();
   }, [currentUser, navigate]);
+
+  // Load available orders
+  async function loadAvailableOrders() {
+    setLoadingOrders(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/orders/delivery/available`);
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAvailableOrders(data.orders || []);
+      }
+    } catch (error) {
+      console.error("Error loading available orders:", error);
+    } finally {
+      setLoadingOrders(false);
+    }
+  }
+
+  // Load store overview orders (active orders)
+  async function loadStoreOverviewOrders() {
+    setLoadingStoreOrders(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/orders/delivery/store-overview`);
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setStoreOverviewOrders(data.orders || []);
+      }
+    } catch (error) {
+      console.error("Error loading store overview orders:", error);
+    } finally {
+      setLoadingStoreOrders(false);
+    }
+  }
 
   // Load schedule data
   async function loadSchedule() {
@@ -107,11 +147,8 @@ export default function DeliveryDashboard() {
     earningsToday: 0,
     avgRating: 0.0,
     timeOnline: "0.0 h",
+    availableOrders: availableOrders.length
   };
-
-  const assignments = [
-  
-  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -218,21 +255,130 @@ export default function DeliveryDashboard() {
 
         {/* Body - Conditional Content Based on Active Tab */}
         {activeTab === "dashboard" && (
-          <div className="max-w-7xl mx-auto px-6 pb-12 grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Current Assignments */}
+          <div className="max-w-7xl mx-auto px-6 pb-12 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Store Overview */}
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Current Assignments</h3>
-                <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">0</span>
+                <h3 className="text-lg font-semibold">Store Overview</h3>
+                <span className="text-xs bg-orange-600 text-white px-2 py-0.5 rounded-full">{storeOverviewOrders.length}</span>
               </div>
               <div className="mt-4 space-y-4">
-                {assignments.length === 0 && (
+                {loadingStoreOrders ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-orange-500 mx-auto mb-4"></div>
+                    <p>Loading active orders...</p>
+                  </div>
+                ) : storeOverviewOrders.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                    </svg>
+                    <p>No active orders</p>
+                    <p className="text-sm">Orders will appear here when stores mark them ready</p>
+                  </div>
+                ) : (
+                  storeOverviewOrders.slice(0, 3).map((order) => {
+                    const totalItems = order.products?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+                    return (
+                      <div key={order._id} className="border rounded-lg p-4 bg-gray-50">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-semibold text-gray-900">#{order.orderNumber || order._id.slice(-6)}</span>
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                                Active Order
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              {order.customerInfo?.name || 'Customer'} • {totalItems} items
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-sm text-gray-600 mb-2">
+                          {order.deliveryAddress?.city}, {order.deliveryAddress?.state}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-semibold text-green-600">
+                            ₹{order.totalAmount || 0}
+                          </div>
+                          <span className="text-xs text-gray-500">Store: {order.storeInfo?.name || 'Store'}</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                {storeOverviewOrders.length > 3 && (
+                  <div className="text-center">
+                    <button className="text-sm text-orange-600 hover:text-orange-800">
+                      View all {storeOverviewOrders.length} orders
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Available Orders */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Available Orders</h3>
+                <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">{availableOrders.length}</span>
+              </div>
+              <div className="mt-4 space-y-4">
+                {loadingOrders ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                    <p>Loading available orders...</p>
+                  </div>
+                ) : availableOrders.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                     </svg>
-                    <p>No active assignments</p>
+                    <p>No available orders</p>
                     <p className="text-sm">Check back later for new delivery requests</p>
+                  </div>
+                ) : (
+                  availableOrders.slice(0, 3).map((order) => {
+                    const totalItems = order.products?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+                    return (
+                      <div key={order._id} className="border rounded-lg p-4 bg-gray-50">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-semibold text-gray-900">#{order.orderNumber || order._id.slice(-6)}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                order.status === 'ready_for_delivery' ? 'bg-green-100 text-green-700' :
+                                order.status === 'out_for_delivery' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {order.status === 'ready_for_delivery' ? 'Ready for Delivery' :
+                                 order.status === 'out_for_delivery' ? 'Out for Delivery' : order.status}
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              {order.customerInfo?.name || 'Customer'} • {totalItems} items
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-sm text-gray-600 mb-2">
+                          {order.deliveryAddress?.city}, {order.deliveryAddress?.state}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-semibold text-green-600">
+                            ₹{order.totalAmount || 0}
+                          </div>
+                          <button className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
+                            Accept Delivery
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                {availableOrders.length > 3 && (
+                  <div className="text-center">
+                    <button className="text-sm text-blue-600 hover:text-blue-800">
+                      View all {availableOrders.length} orders
+                    </button>
                   </div>
                 )}
               </div>

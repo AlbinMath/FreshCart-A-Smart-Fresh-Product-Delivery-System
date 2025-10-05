@@ -22,7 +22,7 @@ export function useNotifications() {
 }
 
 export function NotificationProvider({ children }) {
-  const { currentUser } = useAuth();
+  const { currentUser, loading: authLoading } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -34,33 +34,67 @@ export function NotificationProvider({ children }) {
     emailVerificationReminders: true
   });
 
-  // Load notifications when user changes
+  // Helper function to check if auth is ready for API calls with retry
+  const isAuthReady = async (maxRetries = 3, delay = 200) => {
+    if (!currentUser || authLoading) return false;
+    
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        // Try to get the Firebase token to verify auth is fully ready
+        const token = await currentUser.getIdToken(false);
+        if (token) return true;
+      } catch (error) {
+        // If this is not the last retry, wait before trying again
+        if (i < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    return false;
+  };
+
+  // Load notifications when user changes and auth is ready
   useEffect(() => {
+    // Wait for auth to finish loading
+    if (authLoading) return;
+    
     if (currentUser) {
-      loadNotifications();
-      loadUnreadCount();
-      loadStats();
+      // Add a small delay and verify auth is ready before loading
+      // apiService now has its own waitForAuth mechanism
+      const timer = setTimeout(async () => {
+        const ready = await isAuthReady(3, 200); // Try 3 times with 200ms delay
+        if (ready) {
+          loadNotifications();
+          loadUnreadCount();
+          loadStats();
+        }
+      }, 300); // 300ms initial delay (apiService will wait up to 2s if needed)
+      
+      return () => clearTimeout(timer);
     } else {
       // Clear notifications when user logs out
       setNotifications([]);
       setUnreadCount(0);
       setStats(null);
     }
-  }, [currentUser]);
+  }, [currentUser, authLoading]);
 
   // Auto-refresh unread count every 30 seconds
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || authLoading) return;
 
-    const interval = setInterval(() => {
-      loadUnreadCount();
+    const interval = setInterval(async () => {
+      const ready = await isAuthReady();
+      if (ready) {
+        loadUnreadCount();
+      }
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [currentUser]);
+  }, [currentUser, authLoading]);
 
   const loadNotifications = async (page = 1, limit = 20, unreadOnly = false) => {
-    if (!currentUser) return;
+    if (!currentUser || authLoading) return;
     
     try {
       setLoading(true);
@@ -69,6 +103,16 @@ export function NotificationProvider({ children }) {
       setUnreadCount(response.unreadCount || 0);
       return response;
     } catch (error) {
+      // Silently fail on authentication errors (401, token issues, etc.)
+      if (error.status === 401 || error.isAuthError) {
+        // 401 Unauthorized - silently ignore (auth not ready yet)
+        return;
+      }
+      const errorMsg = error.message?.toLowerCase() || '';
+      if (errorMsg.includes('token') || errorMsg.includes('authenticated') || errorMsg.includes('auth') || errorMsg.includes('unauthorized')) {
+        // Auth error - silently ignore
+        return;
+      }
       console.error('Error loading notifications:', error);
       throw error;
     } finally {
@@ -77,23 +121,43 @@ export function NotificationProvider({ children }) {
   };
 
   const loadUnreadCount = async () => {
-    if (!currentUser) return;
+    if (!currentUser || authLoading) return;
     
     try {
       const count = await getUnreadCount();
       setUnreadCount(count);
     } catch (error) {
+      // Silently fail on authentication errors (401, token issues, etc.)
+      if (error.status === 401 || error.isAuthError) {
+        // 401 Unauthorized - silently ignore (auth not ready yet)
+        return;
+      }
+      const errorMsg = error.message?.toLowerCase() || '';
+      if (errorMsg.includes('token') || errorMsg.includes('authenticated') || errorMsg.includes('auth') || errorMsg.includes('unauthorized')) {
+        // Auth error - silently ignore
+        return;
+      }
       console.error('Error loading unread count:', error);
     }
   };
 
   const loadStats = async () => {
-    if (!currentUser) return;
+    if (!currentUser || authLoading) return;
     
     try {
       const response = await getNotificationStats();
       setStats(response.stats);
     } catch (error) {
+      // Silently fail on authentication errors (401, token issues, etc.)
+      if (error.status === 401 || error.isAuthError) {
+        // 401 Unauthorized - silently ignore (auth not ready yet)
+        return;
+      }
+      const errorMsg = error.message?.toLowerCase() || '';
+      if (errorMsg.includes('token') || errorMsg.includes('authenticated') || errorMsg.includes('auth') || errorMsg.includes('unauthorized')) {
+        // Auth error - silently ignore
+        return;
+      }
       console.error('Error loading notification stats:', error);
     }
   };
@@ -204,7 +268,7 @@ export function NotificationProvider({ children }) {
   };
 
   const refreshNotifications = () => {
-    if (currentUser) {
+    if (currentUser && !authLoading) {
       loadNotifications();
       loadUnreadCount();
       loadStats();

@@ -1,172 +1,201 @@
-import { useState, useRef, useCallback } from 'react';
-import { Wrapper, Status } from '@googlemaps/react-wrapper';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { MapPin } from 'lucide-react';
+import { Navigation } from 'lucide-react';
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+// Fix for default markers in react-leaflet
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
-const MapComponent = ({ onLocationSelect, initialLocation }) => {
-  const mapRef = useRef(null);
-  const [map, setMap] = useState(null);
-  const [marker, setMarker] = useState(null);
+function MapController({ mapCenter }) {
+  const map = useMap();
 
-  const onLoad = useCallback((mapInstance) => {
-    setMap(mapInstance);
-
-    // Default to Mumbai coordinates if no initial location
-    const defaultLocation = initialLocation || { lat: 19.0760, lng: 72.8777 };
-
-    // Create marker
-    const newMarker = new google.maps.Marker({
-      position: defaultLocation,
-      map: mapInstance,
-      draggable: true,
-      title: 'Selected Location'
-    });
-
-    setMarker(newMarker);
-
-    // Add click listener to map
-    mapInstance.addListener('click', (event) => {
-      const clickedLocation = {
-        lat: event.latLng.lat(),
-        lng: event.latLng.lng()
-      };
-
-      newMarker.setPosition(clickedLocation);
-      onLocationSelect(clickedLocation);
-    });
-
-    // Add drag listener to marker
-    newMarker.addListener('dragend', (event) => {
-      const draggedLocation = {
-        lat: event.latLng.lat(),
-        lng: event.latLng.lng()
-      };
-      onLocationSelect(draggedLocation);
-    });
-
-    // Center map on location
-    mapInstance.setCenter(defaultLocation);
-    mapInstance.setZoom(15);
-
-    // Call onLocationSelect with initial location
-    onLocationSelect(defaultLocation);
-  }, [onLocationSelect, initialLocation]);
-
-  const onUnmount = useCallback(() => {
-    setMap(null);
-    if (marker) {
-      marker.setMap(null);
+  useEffect(() => {
+    if (mapCenter) {
+      map.setView(mapCenter, 15);
     }
-  }, [marker]);
+  }, [mapCenter, map]);
 
-  return (
-    <div ref={mapRef} style={{ height: '300px', width: '100%' }} />
+  return null;
+}
+
+function LocationMarker({ position, setPosition, initialPosition }) {
+  const [markerPosition, setMarkerPosition] = useState(position || initialPosition);
+
+  useMapEvents({
+    click(e) {
+      const newPos = [e.latlng.lat, e.latlng.lng];
+      setMarkerPosition(newPos);
+      setPosition(newPos);
+    },
+  });
+
+  return markerPosition === null ? null : (
+    <Marker position={markerPosition}>
+      <Popup>
+        Selected Location<br />
+        Lat: {markerPosition[0].toFixed(6)}<br />
+        Lng: {markerPosition[1].toFixed(6)}
+      </Popup>
+    </Marker>
   );
-};
-
-const render = (status) => {
-  switch (status) {
-    case Status.LOADING:
-      return <div className="flex items-center justify-center h-64">Loading map...</div>;
-    case Status.FAILURE:
-      return <div className="flex items-center justify-center h-64 text-red-500">Failed to load map</div>;
-    case Status.SUCCESS:
-      return <MapComponent />;
-  }
-};
+}
 
 export function MapPicker({ onLocationSelect, initialLocation, className }) {
-  const [selectedLocation, setSelectedLocation] = useState(initialLocation || null);
+  const [position, setPosition] = useState(null);
+  const [mapCenter, setMapCenter] = useState([20.5937, 78.9629]); // Center of India
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+  
+  // Track if we've initialized to prevent calling callback on mount
+  const hasInitialized = useRef(false);
+  const prevPositionRef = useRef(null);
 
-  const handleLocationSelect = (location) => {
-    setSelectedLocation(location);
-    onLocationSelect(location);
+  // Helper function to compare coordinates
+  const areCoordinatesEqual = (coords1, coords2) => {
+    if (!coords1 || !coords2) return false;
+    const lat1 = Array.isArray(coords1) ? coords1[0] : coords1.lat;
+    const lng1 = Array.isArray(coords1) ? coords1[1] : coords1.lng;
+    const lat2 = Array.isArray(coords2) ? coords2[0] : coords2.lat;
+    const lng2 = Array.isArray(coords2) ? coords2[1] : coords2.lng;
+    return lat1 === lat2 && lng1 === lng2;
   };
 
-  const handleManualInput = (field, value) => {
-    const newLocation = {
-      ...selectedLocation,
-      [field]: parseFloat(value)
-    };
-    setSelectedLocation(newLocation);
-    onLocationSelect(newLocation);
+  // Initialize position from initialLocation only once on mount
+  useEffect(() => {
+    if (hasInitialized.current) return;
+    
+    let coords = null;
+    
+    if (initialLocation && Array.isArray(initialLocation) && initialLocation.length === 2) {
+      coords = initialLocation;
+    } else if (initialLocation && initialLocation.lat && initialLocation.lng) {
+      coords = [initialLocation.lat, initialLocation.lng];
+    }
+    
+    if (coords) {
+      setPosition(coords);
+      setMapCenter(coords);
+      prevPositionRef.current = coords;
+      hasInitialized.current = true;
+    } else {
+      // Try to get user's current location only if no initial location
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const newCoords = [pos.coords.latitude, pos.coords.longitude];
+            setPosition(newCoords);
+            setMapCenter(newCoords);
+            prevPositionRef.current = newCoords;
+            hasInitialized.current = true;
+          },
+          (err) => {
+            console.log('Geolocation error:', err);
+            hasInitialized.current = true;
+            // Keep default center
+          }
+        );
+      } else {
+        hasInitialized.current = true;
+      }
+    }
+  }, []); // Empty dependency array - run only once on mount
+
+  const getCurrentLocation = () => {
+    setIsGettingLocation(true);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const coords = [pos.coords.latitude, pos.coords.longitude];
+          setPosition(coords);
+          setMapCenter(coords);
+          setIsGettingLocation(false);
+        },
+        (err) => {
+          console.log('Geolocation error:', err);
+          setIsGettingLocation(false);
+          alert('Unable to get your current location. Please check your browser settings.');
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000 // 5 minutes
+        }
+      );
+    } else {
+      setIsGettingLocation(false);
+      alert('Geolocation is not supported by this browser.');
+    }
   };
 
-  if (!GOOGLE_MAPS_API_KEY) {
-    return (
-      <div className={`p-4 border rounded-lg bg-gray-50 ${className}`}>
-        <p className="text-sm text-gray-600 mb-2">
-          Map integration requires Google Maps API key. Please add VITE_GOOGLE_MAPS_API_KEY to your environment variables.
-        </p>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="lat">Latitude</Label>
-            <Input
-              id="lat"
-              type="number"
-              step="any"
-              value={selectedLocation?.lat || ''}
-              onChange={(e) => handleManualInput('lat', e.target.value)}
-              placeholder="-90 to 90"
-            />
-          </div>
-          <div>
-            <Label htmlFor="lng">Longitude</Label>
-            <Input
-              id="lng"
-              type="number"
-              step="any"
-              value={selectedLocation?.lng || ''}
-              onChange={(e) => handleManualInput('lng', e.target.value)}
-              placeholder="-180 to 180"
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Call the callback only when position changes from user interaction
+  // and only if it's actually different from the previous position
+  useEffect(() => {
+    // Skip if not initialized yet
+    if (!hasInitialized.current) return;
+    
+    // Skip if position hasn't actually changed
+    if (areCoordinatesEqual(position, prevPositionRef.current)) return;
+    
+    // Update previous position
+    prevPositionRef.current = position;
+    
+    // Call the callback
+    if (position && onLocationSelect) {
+      onLocationSelect({
+        lat: position[0],
+        lng: position[1]
+      });
+    }
+  }, [position, onLocationSelect]);
 
   return (
-    <div className={`space-y-4 ${className}`}>
-      <div className="border rounded-lg overflow-hidden">
-        <Wrapper apiKey={GOOGLE_MAPS_API_KEY} render={render}>
-          <MapComponent onLocationSelect={handleLocationSelect} initialLocation={initialLocation} />
-        </Wrapper>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="lat">Latitude</Label>
-          <Input
-            id="lat"
-            type="number"
-            step="any"
-            value={selectedLocation?.lat || ''}
-            onChange={(e) => handleManualInput('lat', e.target.value)}
-            placeholder="-90 to 90"
-          />
+    <div className={className}>
+      <div className="mb-2 flex justify-between items-center">
+        <div className="text-sm text-gray-600">
+          Click on the map to select your location
         </div>
-        <div>
-          <Label htmlFor="lng">Longitude</Label>
-          <Input
-            id="lng"
-            type="number"
-            step="any"
-            value={selectedLocation?.lng || ''}
-            onChange={(e) => handleManualInput('lng', e.target.value)}
-            placeholder="-180 to 180"
+        <Button
+          onClick={getCurrentLocation}
+          disabled={isGettingLocation}
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-1"
+        >
+          <Navigation className="h-3 w-3" />
+          {isGettingLocation ? 'Getting Location...' : 'Current Location'}
+        </Button>
+      </div>
+      <div className="h-64 w-full border rounded-lg overflow-hidden">
+        <MapContainer
+          center={mapCenter}
+          zoom={13}
+          style={{ height: '100%', width: '100%' }}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
+          <LocationMarker
+            position={position}
+            setPosition={setPosition}
+            initialPosition={initialLocation}
+          />
+          <MapController mapCenter={mapCenter} />
+        </MapContainer>
+      </div>
+      {position && (
+        <div className="mt-2 text-sm text-gray-700">
+          Selected coordinates: {position[0].toFixed(6)}, {position[1].toFixed(6)}
         </div>
-      </div>
-
-      <div className="flex items-center gap-2 text-sm text-gray-600">
-        <MapPin className="h-4 w-4" />
-        <span>Click on the map or drag the marker to select your location</span>
-      </div>
+      )}
     </div>
   );
 }
+
+export default MapPicker;

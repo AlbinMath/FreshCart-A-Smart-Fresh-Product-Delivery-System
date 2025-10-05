@@ -4,6 +4,19 @@ import { useNavigate } from "react-router-dom";
 import { validateProfileData, validatePasswordChange, validateAddress, sanitizeInput, validateBusinessLicense } from '../utils/validation';
 import ProfileImageUpload from "../components/ProfileImageUpload";
 import BranchStores from "../components/BranchStores";
+import { addressService } from '../services/addressService';
+import { MapPicker } from "../components/MapPicker";
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix for default markers in react-leaflet
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
 function Profile() {
   const { currentUser, getUserProfile, updateUserProfile, fetchUserProfile, changePassword, sendVerificationEmail, needsEmailVerification, reloadUser, deleteAccount } = useAuth();
@@ -24,6 +37,7 @@ function Profile() {
     storeName: "",
     businessLicense: "",
     storeAddress: "",
+    storeCoordinates: null, // Store coordinates for Leaflet integration
     sellerCategory: "",
     vehicleType: "",
     licenseNumber: "",
@@ -126,6 +140,7 @@ function Profile() {
           storeName: backendProfile.storeName || "",
           businessLicense: backendProfile.businessLicense || "",
           storeAddress: backendProfile.storeAddress || "",
+          storeCoordinates: backendProfile.storeCoordinates || null,
           sellerCategory: backendProfile.sellerCategory || "",
           vehicleType: backendProfile.vehicleType || "",
           licenseNumber: backendProfile.licenseNumber || "",
@@ -154,13 +169,15 @@ function Profile() {
         }
       }
 
-      // Load addresses from backend (skip for admin)
+      // Load addresses from backend (skip for admin/seller)
       const role = (backendProfile?.role) || (getUserProfile()?.role) || 'customer';
       if (role !== 'admin' && role !== 'seller') {
-        const response = await fetch(`http://localhost:5000/api/users/${currentUser.uid}/addresses`);
-        if (response.ok) {
-          const addressData = await response.json();
+        try {
+          const addressData = await addressService.getAddresses(currentUser.uid);
           setAddresses(addressData);
+        } catch (error) {
+          console.error('Error loading addresses:', error);
+          setAddresses([]);
         }
       }
     } catch (error) {
@@ -204,6 +221,39 @@ function Profile() {
       setMessage({ type: "success", text: "Profile updated successfully!" });
       // Update local state with sanitized data
       setProfileData(sanitizedData);
+
+      // If user is store/seller and has storeAddress with coordinates, save to addresses database
+      let usersRole = getUserRole();
+      if ((usersRole === 'store' || usersRole === 'seller') && sanitizedData.storeAddress && sanitizedData.storeCoordinates) {
+        try {
+          // Check if store address already exists in addresses database
+          const existingAddresses = await addressService.getAddresses(currentUser.uid);
+          const storeAddress = existingAddresses.find(addr => addr.type === 'store');
+
+          if (storeAddress) {
+            // Update existing store address
+            await addressService.updateAddress(currentUser.uid, storeAddress._id, {
+              type: 'store',
+              name: sanitizedData.storeName || 'Store Location',
+              street: sanitizedData.storeAddress,
+              coordinates: sanitizedData.storeCoordinates,
+              isDefault: true
+            });
+          } else {
+            // Create new store address
+            await addressService.addAddress(currentUser.uid, {
+              type: 'store',
+              name: sanitizedData.storeName || 'Store Location',
+              street: sanitizedData.storeAddress,
+              coordinates: sanitizedData.storeCoordinates,
+              isDefault: true
+            });
+          }
+        } catch (addressError) {
+          console.error('Error saving store address to addresses database:', addressError);
+          // Don't fail the profile update if address save fails
+        }
+      }
     } catch (error) {
       setMessage({ type: "error", text: "Error updating profile: " + error.message });
     }
@@ -313,18 +363,14 @@ function Profile() {
     if (!window.confirm("Are you sure you want to delete this address?")) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/api/users/${currentUser.uid}/addresses/${addressId}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        await loadUserProfile();
-        setMessage({ type: "success", text: "Address deleted successfully!" });
-      } else {
-        setMessage({ type: "error", text: "Failed to delete address" });
-      }
+      await addressService.deleteAddress(currentUser.uid, addressId);
+      // Reload addresses after deletion
+      const addressData = await addressService.getAddresses(currentUser.uid);
+      setAddresses(addressData);
+      setMessage({ type: "success", text: "Address deleted successfully!" });
     } catch (error) {
-      setMessage({ type: "error", text: "Error deleting address" });
+      console.error('Error deleting address:', error);
+      setMessage({ type: "error", text: error.message || "Failed to delete address" });
     }
   };
 
@@ -500,8 +546,30 @@ function Profile() {
                 value={profileData.storeAddress}
                 onChange={handleInputChange}
                 rows="3"
+                placeholder="Enter your store address"
                 className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               />
+              <p className="text-xs text-gray-500 mt-1">Enter the address details, then select the exact location on the map below.</p>
+            </div>
+
+            {/* Store Location Map */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Store Location on Map</label>
+              <div className="space-y-4">
+                <div className="text-sm text-gray-600">
+                  Click on the map to select your store's exact location. This helps customers find you easily.
+                </div>
+                <MapPicker
+                  onLocationSelect={(coordinates) => setProfileData(prev => ({...prev, storeCoordinates: coordinates}))}
+                  initialLocation={profileData.storeCoordinates}
+                  className="border rounded-lg p-4"
+                />
+                {profileData.storeCoordinates && (
+                  <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
+                    📍 Selected Location: {profileData.storeCoordinates.lat?.toFixed(6)}, {profileData.storeCoordinates.lng?.toFixed(6)}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Store Category</label>
@@ -651,8 +719,30 @@ function Profile() {
                   value={profileData.storeAddress}
                   onChange={handleInputChange}
                   rows="3"
+                  placeholder="Enter your store address"
                   className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
+                <p className="text-xs text-gray-500 mt-1">Enter the address details, then select the exact location on the map below.</p>
+              </div>
+
+              {/* Store Location Map */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Store Location on Map</label>
+                <div className="space-y-4">
+                  <div className="text-sm text-gray-600">
+                    Click on the map to select your store's exact location. This helps customers find you easily.
+                  </div>
+                  <MapPicker
+                    onLocationSelect={(coordinates) => setProfileData(prev => ({...prev, storeCoordinates: coordinates}))}
+                    initialLocation={profileData.storeCoordinates}
+                    className="border rounded-lg p-4"
+                  />
+                  {profileData.storeCoordinates && (
+                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
+                      📍 Selected Location: {profileData.storeCoordinates.lat?.toFixed(6)}, {profileData.storeCoordinates.lng?.toFixed(6)}
+                    </div>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Store Category</label>
@@ -956,180 +1046,73 @@ function Profile() {
             {activeTab === "addresses" && (
               <div className="space-y-6">
                 <div className="bg-gray-50 rounded-lg p-6">
-                  <h3 className="text-lg font-semibold mb-4">
-                    {editingAddress ? "Edit Address" : "Add New Address"}
-                  </h3>
-                  
-                  <form onSubmit={handleAddressSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Address Type</label>
-                      <select
-                        name="type"
-                        value={newAddress.type}
-                        onChange={handleAddressChange}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                      >
-                        <option value="home">Home</option>
-                        <option value="work">Work</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">House/Building</label>
-                      <input
-                        type="text"
-                        name="house"
-                        value={newAddress.house}
-                        onChange={handleAddressChange}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                      />
-
-                      <label className="block text-sm font-medium text-gray-700 mb-2 mt-3">Street Address</label>
-                      <input
-                        type="text"
-                        name="street"
-                        value={newAddress.street}
-                        onChange={handleAddressChange}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
-                      <input
-                        type="text"
-                        name="city"
-                        value={newAddress.city}
-                        onChange={handleAddressChange}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
-                      <input
-                        type="text"
-                        name="state"
-                        value={newAddress.state}
-                        onChange={handleAddressChange}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">ZIP Code</label>
-                      <input
-                        type="text"
-                        name="zipCode"
-                        value={newAddress.zipCode}
-                        onChange={handleAddressChange}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
-                      <input
-                        type="text"
-                        name="country"
-                        value={newAddress.country}
-                        onChange={handleAddressChange}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                        required
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="flex items-center">
-                        <input
-                          type="checkbox"
-                          name="isDefault"
-                          checked={newAddress.isDefault}
-                          onChange={handleAddressChange}
-                          className="mr-2 h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-                        />
-                        <span className="text-sm text-gray-700">Set as default address</span>
-                      </label>
-                    </div>
-
-                    <div className="md:col-span-2 flex space-x-3">
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-semibold py-3 px-6 rounded-lg transition duration-200"
-                      >
-                        {loading ? "Saving..." : (editingAddress ? "Update Address" : "Add Address")}
-                      </button>
-                      
-                      {editingAddress && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingAddress(null);
-                            setNewAddress({
-                              type: "home",
-                              street: "",
-                              city: "",
-                              state: "",
-                              zipCode: "",
-                              country: "India",
-                              isDefault: false
-                            });
-                          }}
-                          className="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-200"
-                        >
-                          Cancel
-                        </button>
-                      )}
-                    </div>
-                  </form>
-                </div>
-
-                {/* Existing Addresses */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">Your Addresses</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {addresses.map((address, index) => (
-                      <div key={address._id || index} className="border border-gray-200 rounded-lg p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize">
-                            {address.type}
-                          </span>
-                          {address.isDefault && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              Default
-                            </span>
-                          )}
-                        </div>
-                        
-                        <div className="text-sm text-gray-600 mb-3">
-                          <p>{address.house ? `${address.house}, ` : ''}{address.street}</p>
-                          <p>{address.city}, {address.state} {address.zipCode}</p>
-                          <p>{address.country}</p>
-                        </div>
-
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => handleEditAddress(address)}
-                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteAddress(address._id)}
-                            className="text-red-600 hover:text-red-800 text-sm font-medium"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold">Your Addresses</h3>
+                    <button
+                      onClick={() => navigate('/add-address')}
+                      className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200"
+                    >
+                      Add New Address
+                    </button>
                   </div>
+
+                  {addresses.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 mb-4">No addresses found</p>
+                      <button
+                        onClick={() => navigate('/add-address')}
+                        className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200"
+                      >
+                        Add Your First Address
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {addresses.map((address, index) => (
+                        <div key={address._id || index} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize">
+                              {address.type}
+                            </span>
+                            {address.isDefault && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Default
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="text-sm text-gray-600 mb-3">
+                            <p><strong>{address.name}</strong></p>
+                            <p>{address.phone}</p>
+                            <p>{address.house ? `${address.house}, ` : ''}{address.street}</p>
+                            {address.landmark && <p>Near: {address.landmark}</p>}
+                            <p>{address.city}, {address.state} {address.zipCode}</p>
+                            <p>{address.country}</p>
+                            {address.coordinates && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                📍 {address.coordinates.lat?.toFixed(6)}, {address.coordinates.lng?.toFixed(6)}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => navigate('/add-address', { state: { address } })}
+                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAddress(address._id)}
+                              className="text-red-600 hover:text-red-800 text-sm font-medium"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
