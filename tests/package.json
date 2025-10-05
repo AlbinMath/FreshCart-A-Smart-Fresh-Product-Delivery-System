@@ -43,7 +43,7 @@
     "run:delivery": ".\\run-tests.bat --test-suite delivery",
     "run:firefox": ".\\run-tests.bat --browser firefox --headed",
     "run:all-browsers": ".\\run-tests.bat --browser all",
-    "healthcheck": "node -e \"console.log('Test environment health check...'); process.exit(0)\"",
+    "healthcheck": "node health-check.js",
     "pretest": "npm run healthcheck",
     "posttest": "npm run test:report"
   },
@@ -58,6 +58,10 @@
   "license": "ISC",
   "devDependencies": {
     "@playwright/test": "^1.40.0",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "cross-env": "^7.0.3",
+    "rimraf": "^5.0.5",
+    "prettier": "^3.0.3",
+    "eslint": "^8.53.0"
   }
 }
