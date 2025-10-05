@@ -447,7 +447,7 @@ router.get('/:uid/store-hours', async (req, res) => {
     const { uid } = req.params;
     const user = await User.findOne({ uid }).select('storeHours role');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    if (user.role !== 'seller') return res.status(403).json({ success: false, message: 'Only sellers can access store hours' });
+    if (!['seller', 'store'].includes(user.role)) return res.status(403).json({ success: false, message: 'Only sellers can access store hours' });
     
     return res.json({ success: true, storeHours: user.storeHours || [] });
   } catch (e) {
@@ -462,7 +462,7 @@ router.post('/:uid/store-hours', async (req, res) => {
     const { day, openTime, closeTime, isClosed, note } = req.body || {};
     const user = await User.findOne({ uid });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    if (user.role !== 'seller') return res.status(403).json({ success: false, message: 'Only sellers can manage store hours' });
+    if (!['seller', 'store'].includes(user.role)) return res.status(403).json({ success: false, message: 'Only sellers can manage store hours' });
 
     if (!day) return res.status(400).json({ success: false, message: 'Day is required' });
     if (!isClosed && (!openTime || !closeTime)) return res.status(400).json({ success: false, message: 'Opening and closing times are required for open days' });
@@ -472,10 +472,16 @@ router.post('/:uid/store-hours', async (req, res) => {
       user.storeHours = [];
     }
 
-    // Check if hours already exist for this day
-    const existingIndex = user.storeHours.findIndex(h => h.day === day);
+    // Normalize day name for comparison (trim and case-insensitive)
+    const normalizedDay = day.trim();
+    
+    // Check if hours already exist for this day (case-insensitive comparison)
+    const existingIndex = user.storeHours.findIndex(h => 
+      h.day && h.day.trim().toLowerCase() === normalizedDay.toLowerCase()
+    );
+    
     const newHours = {
-      day,
+      day: normalizedDay,
       openTime: isClosed ? null : openTime,
       closeTime: isClosed ? null : closeTime,
       isClosed: Boolean(isClosed),
@@ -483,14 +489,17 @@ router.post('/:uid/store-hours', async (req, res) => {
     };
 
     if (existingIndex >= 0) {
-      // Update existing hours
-      user.storeHours[existingIndex] = newHours;
+      // Update existing hours using set to ensure proper update
+      user.storeHours.set(existingIndex, newHours);
     } else {
       // Add new hours
       user.storeHours.push(newHours);
     }
 
+    // Mark the field as modified to ensure Mongoose saves it
+    user.markModified('storeHours');
     await user.save();
+    
     return res.json({ success: true, message: 'Store hours updated', storeHours: user.storeHours });
   } catch (e) {
     console.error('Store hours add/update error:', e);
@@ -503,14 +512,26 @@ router.delete('/:uid/store-hours/:day', async (req, res) => {
     const { uid, day } = req.params;
     const user = await User.findOne({ uid });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    if (user.role !== 'seller') return res.status(403).json({ success: false, message: 'Only sellers can manage store hours' });
+    if (!['seller', 'store'].includes(user.role)) return res.status(403).json({ success: false, message: 'Only sellers can manage store hours' });
 
-    if (!user.storeHours) {
+    if (!user.storeHours || user.storeHours.length === 0) {
       return res.status(404).json({ success: false, message: 'No store hours found' });
     }
 
-    // Remove hours for the specified day
-    user.storeHours = user.storeHours.filter(h => h.day !== day);
+    // Normalize day for comparison
+    const normalizedDay = day.trim();
+    
+    // Remove hours for the specified day (case-insensitive)
+    const initialLength = user.storeHours.length;
+    user.storeHours = user.storeHours.filter(h => 
+      !h.day || h.day.trim().toLowerCase() !== normalizedDay.toLowerCase()
+    );
+    
+    if (user.storeHours.length === initialLength) {
+      return res.status(404).json({ success: false, message: 'Store hours for this day not found' });
+    }
+    
+    user.markModified('storeHours');
     await user.save();
     return res.json({ success: true, message: 'Store hours removed', storeHours: user.storeHours });
   } catch (e) {

@@ -44,7 +44,7 @@ export const addressService = {
   // Update address
   updateAddress: async (uid, addressId, addressData) => {
     const token = localStorage.getItem('token');
-    const response = await fetch(`${API_BASE_URL}/addresses/${addressId}`, {
+    const response = await fetch(`${API_BASE_URL}/addresses/update/${addressId}`, {
       method: 'PUT',
       headers: {
         'Authorization': token ? `Bearer ${token}` : '',
@@ -65,7 +65,7 @@ export const addressService = {
   // Delete address
   deleteAddress: async (uid, addressId) => {
     const token = localStorage.getItem('token');
-    const response = await fetch(`${API_BASE_URL}/addresses/${addressId}`, {
+    const response = await fetch(`${API_BASE_URL}/addresses/delete/${addressId}`, {
       method: 'DELETE',
       headers: {
         'Authorization': token ? `Bearer ${token}` : '',

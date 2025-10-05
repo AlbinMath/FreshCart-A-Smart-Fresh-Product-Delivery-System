@@ -66,27 +66,33 @@ export default function SellerDashboard() {
     setHoursMsg("");
     
     if (!hoursForm.day) {
-      setHoursMsg('Please select a day');
+      const msg = 'Please select a day';
+      setHoursMsg(msg);
+      toast.error(msg);
       return;
     }
     
     if (!hoursForm.isClosed && (!hoursForm.openTime || !hoursForm.closeTime)) {
-      setHoursMsg('Please set opening and closing times');
+      const msg = 'Please set opening and closing times';
+      setHoursMsg(msg);
+      toast.error(msg);
       return;
     }
     
     if (!hoursForm.isClosed && hoursForm.openTime >= hoursForm.closeTime) {
-      setHoursMsg('Closing time must be after opening time');
+      const msg = 'Closing time must be after opening time';
+      setHoursMsg(msg);
+      toast.error(msg);
       return;
     }
 
     try {
       const body = {
-        day: hoursForm.day,
+        day: hoursForm.day.trim(),
         openTime: hoursForm.isClosed ? null : hoursForm.openTime,
         closeTime: hoursForm.isClosed ? null : hoursForm.closeTime,
         isClosed: hoursForm.isClosed,
-        note: hoursForm.note
+        note: hoursForm.note.trim()
       };
 
       const res = await fetch(`http://localhost:5000/api/users/${currentUser.uid}/store-hours`, {
@@ -99,7 +105,9 @@ export default function SellerDashboard() {
       if (!res.ok || !data.success) throw new Error(data.message || 'Failed to save store hours');
 
       setStoreHours(data.storeHours || []);
-      setHoursMsg('Store hours saved successfully');
+      const successMsg = 'Store hours saved successfully';
+      setHoursMsg(successMsg);
+      toast.success(successMsg);
       setHoursForm({
         day: "",
         openTime: "09:00",
@@ -108,11 +116,17 @@ export default function SellerDashboard() {
         note: ""
       });
     } catch (error) {
-      setHoursMsg(error.message || 'Failed to save store hours');
+      const errorMsg = error.message || 'Failed to save store hours';
+      setHoursMsg(errorMsg);
+      toast.error(errorMsg);
     }
   };
 
   const removeStoreHours = async (day) => {
+    if (!window.confirm(`Are you sure you want to remove store hours for ${day}?`)) {
+      return;
+    }
+    
     try {
       const res = await fetch(`http://localhost:5000/api/users/${currentUser.uid}/store-hours/${encodeURIComponent(day)}`, {
         method: 'DELETE'
@@ -122,14 +136,19 @@ export default function SellerDashboard() {
       if (!res.ok || !data.success) throw new Error(data.message || 'Failed to remove store hours');
 
       setStoreHours(data.storeHours || []);
-      setHoursMsg('Store hours removed successfully');
+      const successMsg = 'Store hours removed successfully';
+      setHoursMsg(successMsg);
+      toast.success(successMsg);
     } catch (error) {
-      setHoursMsg(error.message || 'Failed to remove store hours');
+      const errorMsg = error.message || 'Failed to remove store hours';
+      setHoursMsg(errorMsg);
+      toast.error(errorMsg);
     }
   };
 
   const getHoursForDay = (day) => {
-    return storeHours.find(h => h.day === day);
+    if (!day || !Array.isArray(storeHours)) return null;
+    return storeHours.find(h => h.day && h.day.trim().toLowerCase() === day.trim().toLowerCase());
   };
 
   // Order processing functions

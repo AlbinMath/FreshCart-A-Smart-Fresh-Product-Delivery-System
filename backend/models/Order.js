@@ -42,7 +42,7 @@ const orderSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Pending Seller Approval', 'delivery_pending', 'approved', 'Processing', 'Under Delivery', 'Completed', 'Cancelled'],
+    enum: ['Pending Seller Approval', 'delivery_pending', 'approved', 'Processing', 'out_for_delivery', 'Under Delivery', 'delivered', 'Completed', 'Cancelled'],
     default: 'Pending Seller Approval'
   },
   timestamp: {
@@ -80,6 +80,12 @@ const orderSchema = new mongoose.Schema({
     default: function() {
       return new Date(Date.now() + 3 * 60 * 1000); // 3 minutes from now
     }
+  },
+  deliveryOTP: {
+    type: String
+  },
+  qrCodeUrl: {
+    type: String
   }
 });
 

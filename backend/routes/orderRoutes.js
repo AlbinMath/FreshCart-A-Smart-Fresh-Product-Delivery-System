@@ -258,9 +258,9 @@ router.get('/list/:userId', async (req, res) => {
 
     // Group orders by status
     const groupedOrders = {
-      processing: orders.filter(order => order.status === 'Pending Seller Approval' || order.status === 'Processing' || order.status === 'delivery_pending'),
+      processing: orders.filter(order => order.status === 'Pending Seller Approval' || order.status === 'Processing' || order.status === 'delivery_pending' || order.status === 'ready_for_delivery' || order.status === 'out_for_delivery'),
       underDelivery: orders.filter(order => order.status === 'Under Delivery'),
-      completed: orders.filter(order => order.status === 'Completed'),
+      completed: orders.filter(order => order.status === 'Completed' || order.status === 'delivered'),
       cancelled: orders.filter(order => order.status === 'Cancelled')
     };
 
@@ -565,7 +565,7 @@ router.get('/seller/accepted/:sellerId', async (req, res) => {
     const { sellerId } = req.params;
     const orders = await Order.find({
       'storeDetails.sellerId': sellerId,
-      status: 'delivery_pending'
+      status: { $in: ['delivery_pending', 'ready_for_delivery'] }
     }).sort({ timestamp: -1 });
 
     res.json({
@@ -627,6 +627,353 @@ router.put('/seller/process/:orderId', async (req, res) => {
   } catch (error) {
     console.error('Error processing order:', error);
     res.status(500).json({ success: false, message: 'Failed to process order' });
+  }
+});
+
+// Mark order as ready for delivery by seller
+router.put('/seller/ready-delivery/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { sellerId } = req.body;
+
+    const order = await Order.findOne({ _id: orderId, 'storeDetails.sellerId': sellerId });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (order.status !== 'delivery_pending') {
+      return res.status(400).json({ success: false, message: 'Order is not pending delivery' });
+    }
+
+    // Generate OTP if not exists
+    const otp = order.deliveryOTP || Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Generate QR code URL if not exists
+    const qrUrl = order.qrCodeUrl || `${process.env.FRONTEND_URL || 'http://localhost:3000'}/order/track/${order.orderId}`;
+
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: orderId },
+      {
+        status: 'ready_for_delivery',
+        deliveryOTP: otp,
+        qrCodeUrl: qrUrl,
+        $push: {
+          statusTimeline: {
+            status: 'Ready for Delivery',
+            timestamp: new Date()
+          }
+        }
+      },
+      { new: true }
+    );
+
+    // Notify customer about order being ready for delivery
+    await Notification.create({
+      userId: order.userId,
+      type: 'order',
+      title: 'Order Ready for Delivery',
+      message: `Your order ${orderId} is now ready for delivery.`,
+      data: {
+        orderId
+      }
+    });
+
+    res.json({
+      success: true,
+      order: updatedOrder,
+      message: 'Order marked as ready for delivery'
+    });
+  } catch (error) {
+    console.error('Error marking order ready for delivery:', error);
+    res.status(500).json({ success: false, message: 'Failed to mark order ready for delivery' });
+  }
+});
+
+// Get full order details for processing (with OTP/QR generation)
+router.get('/seller/full/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { sellerId } = req.query;
+
+    const order = await Order.findOne({ _id: orderId, 'storeDetails.sellerId': sellerId });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    // Generate OTP if not exists
+    let otp = order.deliveryOTP;
+    if (!otp) {
+      otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+      order.deliveryOTP = otp;
+    }
+
+    // Generate QR code URL if not exists
+    let qrUrl = order.qrCodeUrl;
+    if (!qrUrl) {
+      qrUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/order/track/${order.orderId}`;
+      order.qrCodeUrl = qrUrl;
+    }
+
+    // Save if updated
+    if (!order.deliveryOTP || !order.qrCodeUrl) {
+      await order.save();
+    }
+
+    // Get buyer contact info (assuming User model has phone, email)
+    const User = (await import('../models/User.js')).default;
+    const buyer = await User.findOne({ uid: order.userId });
+
+    res.json({
+      success: true,
+      order: {
+        ...order.toObject(),
+        deliveryOTP: otp,
+        qrCodeUrl: qrUrl,
+        buyerContact: buyer ? {
+          phone: buyer.phone,
+          email: buyer.email,
+          name: buyer.displayName || buyer.name
+        } : null
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching full order details:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch order details' });
+  }
+});
+
+// Get available orders for delivery partners
+router.get('/delivery/available', async (req, res) => {
+  try {
+    const orders = await Order.find({
+      status: { $in: ['ready_for_delivery', 'out_for_delivery'] }
+    })
+    .populate('userId', 'displayName phone email')
+    .sort({ createdAt: -1 })
+    .limit(50);
+
+    res.json({
+      success: true,
+      orders: orders.map(order => ({
+        _id: order._id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        totalAmount: order.totalAmount,
+        deliveryFee: order.deliveryFee,
+        products: order.products,
+        customerInfo: order.customerInfo,
+        deliveryAddress: order.deliveryAddress,
+        storeDetails: order.storeDetails,
+        createdAt: order.createdAt,
+        deliveryOTP: order.status === 'out_for_delivery' ? order.deliveryOTP : null,
+        qrCodeUrl: order.status === 'out_for_delivery' ? order.qrCodeUrl : null
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching available orders:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch available orders' });
+  }
+});
+
+// Get store overview orders (active orders for delivery partners)
+router.get('/delivery/store-overview', async (req, res) => {
+  try {
+    const orders = await Order.find({
+      status: 'delivery_pending'
+    })
+    .populate('userId', 'displayName phone email')
+    .sort({ createdAt: -1 })
+    .limit(50);
+
+    res.json({
+      success: true,
+      orders: orders.map(order => ({
+        _id: order._id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        totalAmount: order.totalAmount,
+        deliveryFee: order.deliveryFee,
+        products: order.products,
+        customerInfo: order.customerInfo,
+        deliveryAddress: order.deliveryAddress,
+        storeInfo: order.storeDetails,
+        createdAt: order.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching store overview orders:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch store overview orders' });
+  }
+});
+
+// Accept order for delivery (delivery partner)
+router.put('/delivery/accept/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { deliveryPartnerId } = req.body;
+
+    const order = await Order.findOne({ _id: orderId });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (order.status !== 'ready_for_delivery') {
+      return res.status(400).json({ success: false, message: 'Order is not ready for delivery' });
+    }
+
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: orderId },
+      {
+        status: 'Processing',
+        deliveryPartnerId: deliveryPartnerId,
+        $push: {
+          statusTimeline: {
+            status: 'Delivery Partner Assigned',
+            timestamp: new Date()
+          }
+        }
+      },
+      { new: true }
+    );
+
+    // Notify customer about delivery partner assignment
+    await Notification.create({
+      userId: order.userId,
+      type: 'order',
+      title: 'Delivery Partner Assigned',
+      message: `A delivery partner has been assigned to your order ${orderId}.`,
+      data: {
+        orderId
+      }
+    });
+
+    res.json({
+      success: true,
+      order: updatedOrder,
+      message: 'Order accepted for delivery'
+    });
+  } catch (error) {
+    console.error('Error accepting order for delivery:', error);
+    res.status(500).json({ success: false, message: 'Failed to accept order for delivery' });
+  }
+});
+
+// Update order status to out_for_delivery
+router.put('/seller/out-for-delivery/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { sellerId } = req.body;
+
+    const order = await Order.findOne({ _id: orderId, 'storeDetails.sellerId': sellerId });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (order.status !== 'Processing') {
+      return res.status(400).json({ success: false, message: 'Order is not in processing status' });
+    }
+
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: orderId },
+      {
+        status: 'out_for_delivery',
+        $push: {
+          statusTimeline: {
+            status: 'Out for Delivery',
+            timestamp: new Date()
+          }
+        }
+      },
+      { new: true }
+    );
+
+    // Notify customer
+    await Notification.create({
+      userId: order.userId,
+      type: 'order',
+      title: 'Order Out for Delivery',
+      message: `Your order ${orderId} is now out for delivery.`,
+      data: {
+        orderId
+      }
+    });
+
+    res.json({
+      success: true,
+      order: updatedOrder,
+      message: 'Order status updated to out for delivery'
+    });
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    res.status(500).json({ success: false, message: 'Failed to update order status' });
+  }
+});
+
+// Update order status to delivered
+router.put('/seller/deliver/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { sellerId, otp } = req.body;
+
+    const order = await Order.findOne({ _id: orderId, 'storeDetails.sellerId': sellerId });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (order.status !== 'out_for_delivery') {
+      return res.status(400).json({ success: false, message: 'Order is not out for delivery' });
+    }
+
+    if (order.deliveryOTP !== otp) {
+      return res.status(400).json({ success: false, message: 'Invalid OTP' });
+    }
+
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: orderId },
+      {
+        status: 'delivered',
+        $push: {
+          statusTimeline: {
+            status: 'Delivered',
+            timestamp: new Date()
+          }
+        }
+      },
+      { new: true }
+    );
+
+    // Update payment status if COD
+    if (order.paymentMethod === 'COD' && order.paymentStatus === 'pending') {
+      await Payment.findOneAndUpdate(
+        { orderId },
+        { paymentStatus: 'paid' }
+      );
+    }
+
+    // Notify customer
+    await Notification.create({
+      userId: order.userId,
+      type: 'order',
+      title: 'Order Delivered',
+      message: `Your order ${orderId} has been successfully delivered.`,
+      data: {
+        orderId
+      }
+    });
+
+    res.json({
+      success: true,
+      order: updatedOrder,
+      message: 'Order delivered successfully'
+    });
+  } catch (error) {
+    console.error('Error delivering order:', error);
+    res.status(500).json({ success: false, message: 'Failed to deliver order' });
   }
 });
 

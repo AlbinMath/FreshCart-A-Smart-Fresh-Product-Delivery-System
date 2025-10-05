@@ -28,21 +28,31 @@ router.post('/add', async (req, res) => {
       return res.status(400).json({ success: false, message: 'User ID required' });
     }
 
-    const addressData = { ...req.body, userId };
+    // Remove any immutable fields that might be accidentally sent
+    const { _id, createdAt, updatedAt, ...addressData } = req.body;
+    const finalAddressData = { ...addressData, userId };
 
     // If this is the first address or marked as default, set it as default
-    if (addressData.isDefault || (await Address.countDocuments({ userId })) === 0) {
-      addressData.isDefault = true;
+    if (finalAddressData.isDefault || (await Address.countDocuments({ userId })) === 0) {
+      finalAddressData.isDefault = true;
       // Remove default flag from other addresses
       await Address.updateMany({ userId }, { isDefault: false });
     }
 
-    const address = new Address(addressData);
+    const address = new Address(finalAddressData);
     await address.save();
 
     res.json({ success: true, address });
   } catch (error) {
     console.error('Error adding address:', error);
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: validationErrors
+      });
+    }
     res.status(500).json({ success: false, message: 'Failed to add address' });
   }
 });
@@ -58,15 +68,18 @@ router.put('/update/:id', async (req, res) => {
 
     const addressData = req.body;
 
+    // Remove immutable fields that shouldn't be updated
+    const { _id, createdAt, updatedAt, ...updateData } = addressData;
+
     // If setting as default, remove default from others
-    if (addressData.isDefault) {
+    if (updateData.isDefault) {
       await Address.updateMany({ userId, _id: { $ne: id } }, { isDefault: false });
     }
 
     const address = await Address.findOneAndUpdate(
       { _id: id, userId },
-      addressData,
-      { new: true }
+      updateData,
+      { new: true, runValidators: true }
     );
 
     if (!address) {
@@ -76,6 +89,14 @@ router.put('/update/:id', async (req, res) => {
     res.json({ success: true, address });
   } catch (error) {
     console.error('Error updating address:', error);
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: validationErrors
+      });
+    }
     res.status(500).json({ success: false, message: 'Failed to update address' });
   }
 });

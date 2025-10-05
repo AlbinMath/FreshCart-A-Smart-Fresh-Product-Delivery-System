@@ -21,9 +21,17 @@ const addressSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
-  address: {
+  house: {
+    type: String,
+    trim: true
+  },
+  street: {
     type: String,
     required: true,
+    trim: true
+  },
+  address: {
+    type: String,
     trim: true
   },
   landmark: {
@@ -40,10 +48,31 @@ const addressSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
-  pincode: {
+  zipCode: {
     type: String,
     required: true,
     trim: true
+  },
+  pincode: {
+    type: String,
+    trim: true // Keep for backward compatibility
+  },
+  country: {
+    type: String,
+    default: 'India',
+    trim: true
+  },
+  coordinates: {
+    lat: {
+      type: Number,
+      min: -90,
+      max: 90
+    },
+    lng: {
+      type: Number,
+      min: -180,
+      max: 180
+    }
   },
   isDefault: {
     type: Boolean,

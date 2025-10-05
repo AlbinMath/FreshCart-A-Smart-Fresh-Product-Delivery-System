@@ -396,6 +396,31 @@ const userSchema = new mongoose.Schema({
       note: { type: String, trim: true }
     }]
   },
+  // Store hours management (day-based for next 7 days)
+  storeHours: [{
+    day: { 
+      type: String, 
+      required: true,
+      trim: true
+    },
+    openTime: { 
+      type: String, 
+      trim: true 
+    },
+    closeTime: { 
+      type: String, 
+      trim: true 
+    },
+    isClosed: { 
+      type: Boolean, 
+      default: false 
+    },
+    note: { 
+      type: String, 
+      trim: true,
+      default: '' 
+    }
+  }],
   bankPinHash: { type: String, default: '' }
 }, { 
   timestamps: true 

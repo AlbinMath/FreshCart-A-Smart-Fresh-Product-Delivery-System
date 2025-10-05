@@ -13,18 +13,66 @@ class ApiService {
   }
 
   /**
+   * Wait for Firebase auth to be ready
+   * @param {number} maxWaitTime - Maximum time to wait in milliseconds
+   * @returns {Promise<Object|null>} Firebase user or null
+   */
+  async waitForAuth(maxWaitTime = 2000) {
+    const startTime = Date.now();
+    
+    // If user is already available, return immediately
+    if (auth.currentUser) {
+      return auth.currentUser;
+    }
+    
+    // Wait for auth state to be ready
+    return new Promise((resolve) => {
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        unsubscribe();
+        resolve(user);
+      });
+      
+      // Timeout fallback
+      setTimeout(() => {
+        unsubscribe();
+        resolve(auth.currentUser);
+      }, maxWaitTime);
+    });
+  }
+
+  /**
    * Get authentication headers (async to get Firebase ID token)
    * @returns {Promise<Object>} Headers object with authorization
+   * @throws {Error} If user is not authenticated
    */
   async getAuthHeaders() {
     let token = null;
     try {
-      const user = auth.currentUser;
-      if (user) {
-        token = await user.getIdToken();
+      // Wait for auth to be ready (with timeout)
+      const user = await this.waitForAuth(2000);
+      
+      if (!user) {
+        const error = new Error('User not authenticated');
+        error.isAuthError = true;
+        error.status = 401;
+        throw error;
+      }
+      
+      // Get fresh token (will auto-refresh if expired)
+      token = await user.getIdToken(false); // false = don't force refresh unless expired
+      
+      if (!token) {
+        const error = new Error('Failed to get authentication token');
+        error.isAuthError = true;
+        error.status = 401;
+        throw error;
       }
     } catch (error) {
-      console.error('Error getting Firebase ID token:', error);
+      // Don't log auth errors to console (they're expected during initialization)
+      if (!error.isAuthError) {
+        console.error('Error getting Firebase ID token:', error);
+      }
+      throw error; // Re-throw to let caller handle it
     }
     return {
       'Content-Type': 'application/json',
@@ -53,6 +101,13 @@ class ApiService {
     const data = await response.json();
     
     if (!response.ok) {
+      // Create a more specific error for 401 Unauthorized
+      if (response.status === 401) {
+        const error = new Error(data.message || 'Unauthorized');
+        error.status = 401;
+        error.isAuthError = true;
+        throw error;
+      }
       throw new Error(data.message || `HTTP error! status: ${response.status}`);
     }
     
