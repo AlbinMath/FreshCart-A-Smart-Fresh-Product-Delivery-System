@@ -1,0 +1,54 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e6]:
+      - link "FreshCart" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e9] [cursor=pointer]: FreshCart
+      - generic [ref=e11]:
+        - link "Login" [ref=e12] [cursor=pointer]:
+          - /url: /login
+        - link "Register" [ref=e13] [cursor=pointer]:
+          - /url: /register
+  - main [ref=e14]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - link "Home" [ref=e18] [cursor=pointer]:
+          - /url: /
+          - img [ref=e19] [cursor=pointer]
+          - generic [ref=e21] [cursor=pointer]: Home
+        - generic [ref=e22]:
+          - heading "FreshCart" [level=1] [ref=e23]
+          - paragraph [ref=e24]: Join the smart fresh product delivery system
+      - generic [ref=e25]:
+        - heading "Create Account" [level=2] [ref=e26]
+        - paragraph [ref=e27]: "I am a:"
+        - generic [ref=e28]:
+          - button "Customer" [pressed] [ref=e29] [cursor=pointer]
+          - button "Seller" [ref=e30] [cursor=pointer]
+          - button "Delivery" [ref=e31] [cursor=pointer]
+        - generic [ref=e32]:
+          - generic [ref=e33]:
+            - generic [ref=e34]: Full Name
+            - textbox "Enter your full name" [ref=e35]: Test User
+          - generic [ref=e36]:
+            - generic [ref=e37]: Email Address
+            - textbox "Enter your email" [ref=e38]: customer-1759689514402-140@example.com
+            - paragraph [ref=e39]: Checking availability...
+          - generic [ref=e40]:
+            - generic [ref=e41]: Phone Number
+            - textbox "Enter your phone number" [active] [ref=e42]: "+16509699097"
+          - generic [ref=e43]:
+            - generic [ref=e44]: Password
+            - textbox "Create a password" [ref=e45]
+          - generic [ref=e46]:
+            - generic [ref=e47]: Confirm Password
+            - textbox "Confirm your password" [ref=e48]
+          - button "Create Account" [ref=e49] [cursor=pointer]
+        - paragraph [ref=e51]:
+          - text: Already have an account?
+          - link "Sign in here" [ref=e52] [cursor=pointer]:
+            - /url: /login
+```

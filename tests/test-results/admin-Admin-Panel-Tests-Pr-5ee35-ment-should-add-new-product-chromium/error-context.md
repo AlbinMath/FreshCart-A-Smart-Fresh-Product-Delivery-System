@@ -1,0 +1,62 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e6]:
+      - link "FreshCart" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e9] [cursor=pointer]: FreshCart
+      - generic [ref=e11]:
+        - link "Login" [ref=e12] [cursor=pointer]:
+          - /url: /login
+        - link "Register" [ref=e13] [cursor=pointer]:
+          - /url: /register
+  - main [ref=e14]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - link "Home" [ref=e18] [cursor=pointer]:
+          - /url: /
+          - img [ref=e19] [cursor=pointer]
+          - generic [ref=e21] [cursor=pointer]: Home
+        - generic [ref=e22]:
+          - heading "FreshCart" [level=1] [ref=e23]
+          - paragraph [ref=e24]: Welcome back to smart fresh product delivery
+      - generic [ref=e25]:
+        - heading "Sign In" [level=2] [ref=e26]
+        - generic [ref=e27]:
+          - generic [ref=e28]:
+            - generic [ref=e29]: Email Address
+            - textbox "Enter your email" [ref=e30]
+          - generic [ref=e31]:
+            - generic [ref=e32]: Password
+            - generic [ref=e33]:
+              - textbox "Enter your password" [ref=e34]
+              - button [ref=e35] [cursor=pointer]:
+                - img [ref=e36] [cursor=pointer]
+          - generic [ref=e39]:
+            - generic [ref=e40]:
+              - checkbox "Remember me" [ref=e41]
+              - generic [ref=e42]: Remember me
+            - link "Forgot password?" [ref=e44] [cursor=pointer]:
+              - /url: /forgot-password
+          - button "Sign In" [ref=e45] [cursor=pointer]
+        - generic [ref=e46]:
+          - generic [ref=e51]: Or continue with
+          - button "Continue with Google" [ref=e53] [cursor=pointer]:
+            - img [ref=e54] [cursor=pointer]
+            - text: Continue with Google
+        - generic [ref=e59]:
+          - paragraph [ref=e60]:
+            - text: Don't have an account?
+            - link "Sign up here" [ref=e61] [cursor=pointer]:
+              - /url: /register
+          - generic [ref=e62]:
+            - paragraph [ref=e63]: Are you a Seller/Vendor or Delivery Partner?
+            - generic [ref=e64]:
+              - link "Seller / Store" [ref=e65] [cursor=pointer]:
+                - /url: /register/store
+              - link "Delivery Partner" [ref=e66] [cursor=pointer]:
+                - /url: /register/delivery
+            - paragraph [ref=e67]: Already registered? Use the Sign In form above.
+```

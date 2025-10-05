@@ -1,0 +1,134 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e6]:
+      - link "FreshCart" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e9] [cursor=pointer]: FreshCart
+      - generic [ref=e11]:
+        - link "Login" [ref=e12] [cursor=pointer]:
+          - /url: /login
+        - link "Register" [ref=e13] [cursor=pointer]:
+          - /url: /register
+  - main [ref=e14]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - heading "Welcome to FreshCart" [level=1] [ref=e18]
+        - paragraph [ref=e19]: Your Smart Fresh Product Delivery System
+        - generic [ref=e20]:
+          - link "Login" [ref=e21] [cursor=pointer]:
+            - /url: /login
+          - link "Register" [ref=e22] [cursor=pointer]:
+            - /url: /register
+      - generic [ref=e23]:
+        - heading "Browse Fresh Products" [level=2] [ref=e24]
+        - generic [ref=e26]:
+          - textbox "Search products..." [ref=e28]
+          - combobox [ref=e30]:
+            - option "All Categories" [selected]
+            - option "Meat"
+          - generic [ref=e31]:
+            - checkbox "In Stock only" [ref=e32]
+            - generic [ref=e33]: In Stock only
+        - generic [ref=e35]:
+          - heading "Meat" [level=3] [ref=e36]
+          - generic [ref=e37]:
+            - generic [ref=e38]:
+              - img "Chicken Wings" [ref=e40]
+              - generic [ref=e41]:
+                - heading "Chicken Wings" [level=3] [ref=e42]
+                - paragraph [ref=e43]: Farm-fresh chicken wings, perfect for spicy marinades, frying, or grilling. Crispy outside, juicy inside. Per kg
+                - generic [ref=e44]: meat
+                - generic [ref=e45]:
+                  - generic [ref=e46]:
+                    - generic [ref=e47]: ₹180.00
+                    - generic [ref=e48]: ₹200.00
+                  - generic [ref=e49]: 89 in stock
+                - generic [ref=e50]: "Sold by: Albin Mathew"
+                - button "Add to Cart" [ref=e51] [cursor=pointer]
+            - generic [ref=e52]:
+              - img "Turkey Drumsticks" [ref=e54]
+              - generic [ref=e55]:
+                - heading "Turkey Drumsticks" [level=3] [ref=e56]
+                - paragraph [ref=e57]: Meaty and flavorful turkey legs, great for roasting or slow-cooked recipes. Rich in nutrients. Per kg
+                - generic [ref=e58]: meat
+                - generic [ref=e59]:
+                  - generic [ref=e60]:
+                    - generic [ref=e61]: ₹220.00
+                    - generic [ref=e62]: ₹280.00
+                  - generic [ref=e63]: 60 in stock
+                - generic [ref=e64]: "Sold by: Albin Mathew"
+                - button "Add to Cart" [ref=e65] [cursor=pointer]
+            - generic [ref=e66]:
+              - img "Pork Shoulder" [ref=e68]
+              - generic [ref=e69]:
+                - heading "Pork Shoulder" [level=3] [ref=e70]
+                - paragraph [ref=e71]: Well-marbled pork shoulder, great for roasting, barbecues, and pulled pork dishes.Per kg
+                - generic [ref=e72]: meat
+                - generic [ref=e73]:
+                  - generic [ref=e74]:
+                    - generic [ref=e75]: ₹300.00
+                    - generic [ref=e76]: ₹340.00
+                  - generic [ref=e77]: 45 in stock
+                - generic [ref=e78]: "Sold by: Albin Mathew"
+                - button "Add to Cart" [ref=e79] [cursor=pointer]
+            - generic [ref=e80]:
+              - img "Mutton Leg" [ref=e82]
+              - generic [ref=e83]:
+                - heading "Mutton Leg" [level=3] [ref=e84]
+                - paragraph [ref=e85]: Premium quality mutton leg, perfect for slow cooking, stews, and rich curries. Tender and flavorful. Per kg
+                - generic [ref=e86]: meat
+                - generic [ref=e87]:
+                  - generic [ref=e88]:
+                    - generic [ref=e89]: ₹720.00
+                    - generic [ref=e90]: ₹800.00
+                  - generic [ref=e91]: 28 in stock
+                - generic [ref=e92]: "Sold by: Albin Mathew"
+                - button "Add to Cart" [ref=e93] [cursor=pointer]
+            - generic [ref=e94]:
+              - img "Lamb Chops" [ref=e96]
+              - generic [ref=e97]:
+                - heading "Lamb Chops" [level=3] [ref=e98]
+                - paragraph [ref=e99]: Choice lamb chops, succulent and tender, excellent for grilling or pan-searing with herbs and garlic. Per kg
+                - generic [ref=e100]: meat
+                - generic [ref=e101]:
+                  - generic [ref=e102]:
+                    - generic [ref=e103]: ₹850.00
+                    - generic [ref=e104]: ₹860.00
+                  - generic [ref=e105]: 14 in stock
+                - generic [ref=e106]: "Sold by: Albin Mathew"
+                - button "Add to Cart" [ref=e107] [cursor=pointer]
+            - generic [ref=e108]:
+              - img "Chicken Breast" [ref=e110]
+              - generic [ref=e111]:
+                - heading "Chicken Breast" [level=3] [ref=e112]
+                - paragraph [ref=e113]: Fresh, skinless chicken breast ideal for grilling, baking, or stir-frying. High in protein and low in fat. Per kg
+                - generic [ref=e114]: meat
+                - generic [ref=e115]:
+                  - generic [ref=e116]:
+                    - generic [ref=e117]: ₹250.00
+                    - generic [ref=e118]: ₹350.00
+                  - generic [ref=e119]: 10 in stock
+                - generic [ref=e120]: "Sold by: Albin Mathew"
+                - button "Add to Cart" [ref=e121] [cursor=pointer]
+      - generic [ref=e122]:
+        - generic [ref=e123]:
+          - generic [ref=e124]: 🥬
+          - heading "Fresh Products" [level=3] [ref=e125]
+          - paragraph [ref=e126]: Get the freshest vegetables, fruits, and groceries delivered to your door.
+        - generic [ref=e127]:
+          - generic [ref=e128]: 🚚
+          - heading "Fast Delivery" [level=3] [ref=e129]
+          - paragraph [ref=e130]: Quick and reliable delivery service to ensure freshness.
+        - generic [ref=e131]:
+          - generic [ref=e132]: 📱
+          - heading "Smart System" [level=3] [ref=e133]
+          - paragraph [ref=e134]: Intelligent ordering system that learns your preferences.
+      - generic [ref=e135]:
+        - heading "Ready to get started?" [level=2] [ref=e136]
+        - paragraph [ref=e137]: Join thousands of customers who trust FreshCart for their fresh product needs.
+        - link "Start Shopping Now" [ref=e138] [cursor=pointer]:
+          - /url: /register
+```
