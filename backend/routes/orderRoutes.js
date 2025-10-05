@@ -475,12 +475,30 @@ router.put('/seller/accept/:orderId', async (req, res) => {
     );
 
     // Update product stocks
-    const ProductModel = getSellerProductModel(sellerId);
-    for (const product of order.products) {
-      await ProductModel.findByIdAndUpdate(
-        product.id,
-        { $inc: { stock: -product.quantity } }
-      );
+    try {
+      const ProductModel = getSellerProductModel(sellerId);
+      console.log(`Updating stock for seller: ${sellerId}`);
+      
+      for (const product of order.products) {
+        console.log(`Attempting to update product ${product.id} - reducing stock by ${product.quantity}`);
+        
+        // Try to find and update the product
+        const updatedProduct = await ProductModel.findByIdAndUpdate(
+          product.id,
+          { $inc: { stock: -product.quantity } },
+          { new: true }
+        );
+        
+        if (updatedProduct) {
+          console.log(`✅ Stock updated for ${product.name}: ${updatedProduct.stock + product.quantity} → ${updatedProduct.stock}`);
+        } else {
+          console.warn(`⚠️ Product not found: ${product.id} (${product.name})`);
+        }
+      }
+    } catch (stockError) {
+      console.error('Error updating product stocks:', stockError);
+      // Don't fail the order acceptance if stock update fails
+      // Log it for admin review
     }
 
     // Notify customer about acceptance
