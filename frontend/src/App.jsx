@@ -28,6 +28,7 @@ import AdminNotifications from "./pages/AdminNotifications";
 import Test from "./pages/Test";
 import DeliveryDashboard from "./pages/DeliveryDashboard";
 import DeliveryProfile from "./pages/DeliveryProfile";
+import DeliveryVerificationPage from "./pages/DeliveryVerificationPage";
 import DeliveryNotifications from "./pages/DeliveryNotifications";
 import DeliverySchedule from "./pages/DeliverySchedule";
 import ProfileSettings from "./pages/ProfileSettings";
@@ -161,6 +162,14 @@ function AppContent() {
                   element={
                     <ProtectedRoute allowedRoles={["delivery"]}>
                       <DeliveryProfile />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/delivery/verification" 
+                  element={
+                    <ProtectedRoute allowedRoles={["delivery"]}>
+                      <DeliveryVerificationPage />
                     </ProtectedRoute>
                   } 
                 />

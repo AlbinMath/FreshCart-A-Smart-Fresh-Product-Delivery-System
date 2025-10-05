@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 export default function DeliveryProfile() {
   const { currentUser, getUserProfile, changePassword } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("profile");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState(null);
   
   // Profile data
   const [profileData, setProfileData] = useState({
@@ -81,7 +84,34 @@ export default function DeliveryProfile() {
     if (profile?.role !== 'delivery') return;
     loadProfileData();
     loadAddresses();
+    loadVerificationStatus();
   }, [currentUser]);
+
+  async function loadVerificationStatus() {
+    try {
+      const res = await fetch(`http://localhost:5000/api/delivery-verification/${currentUser.uid}/status`);
+      if (res.ok) {
+        const data = await res.json();
+        setVerificationStatus(data.data);
+      } else {
+        console.warn('Failed to load verification status:', res.status);
+        // Set a default status for new users
+        setVerificationStatus({
+          exists: false,
+          status: 'not_started',
+          readableStatus: 'Not Started'
+        });
+      }
+    } catch (error) {
+      console.error("Error loading verification status:", error);
+      // Set a default status on error
+      setVerificationStatus({
+        exists: false,
+        status: 'not_started',
+        readableStatus: 'Not Started'
+      });
+    }
+  }
 
   async function loadProfileData() {
     try {
@@ -749,6 +779,33 @@ export default function DeliveryProfile() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
               </svg>
               Delivery Area & Availability
+            </button>
+
+            <button
+              onClick={() => navigate('/delivery/verification')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                activeTab === "verification" ? "bg-green-100 text-green-700" : "text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <div className="flex-1">
+                <div>Verification</div>
+                {verificationStatus && (
+                  <div className="text-xs mt-1">
+                    <span className={`inline-block px-2 py-1 rounded text-xs ${
+                      verificationStatus.status === 'approved' ? 'bg-green-100 text-green-800' :
+                      verificationStatus.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                      verificationStatus.status === 'under_review' ? 'bg-yellow-100 text-yellow-800' :
+                      verificationStatus.status === 'resubmission_required' ? 'bg-orange-100 text-orange-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {verificationStatus.readableStatus || verificationStatus.status || 'Not Started'}
+                    </span>
+                  </div>
+                )}
+              </div>
             </button>
           </nav>
 

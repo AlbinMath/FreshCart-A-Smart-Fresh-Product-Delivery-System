@@ -22,6 +22,7 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import addressRoutes from './routes/addressRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import adminLicenseRoutes from './routes/adminLicenseRoutes.js';
+import deliveryVerificationRoutes from './routes/deliveryVerificationRoutes.js';
 import { logActivity } from './middleware/activityLogger.js';
 import Activity from './models/Activity.js';
 import { initCronJobs } from './scripts/cronJobs.js';
@@ -78,6 +79,7 @@ app.use('/api/addresses', addressRoutes); // Address routes
 app.use('/api/payment', paymentRoutes); // Payment routes
 app.use('/api/orders', orderRoutes); // Order routes
 app.use('/api/admin/licenses', adminLicenseRoutes); // Admin license management
+app.use('/api/delivery-verification', deliveryVerificationRoutes); // Delivery verification routes
 
 // Basic Route
 app.get('/', (req, res) => res.send('FreshCart API Running'));

@@ -723,6 +723,56 @@ export function AuthProvider({ children }) {
     return true;
   }
 
+  // Delivery verification functions
+  async function getDeliveryVerificationStatus() {
+    if (!currentUser) return null;
+    try {
+      const res = await fetch(`${API_BASE_URL}/delivery-verification/${currentUser.uid}/status`);
+      if (res.ok) {
+        const data = await res.json();
+        return data.data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting delivery verification status:', error);
+      return null;
+    }
+  }
+
+  async function checkDeliveryAccess() {
+    if (!currentUser) return { canAccess: false, message: 'Not logged in' };
+    const profile = getUserProfile();
+    
+    if (profile?.role !== 'delivery') {
+      return { canAccess: true, message: 'Not a delivery partner' };
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/delivery-verification/${currentUser.uid}/check-access`);
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          canAccess: data.data.canAccessDashboard,
+          isVerified: data.data.isVerified,
+          status: data.data.status,
+          message: data.data.message
+        };
+      } else {
+        const errorData = await res.json();
+        return {
+          canAccess: false,
+          message: errorData.message || 'Verification check failed'
+        };
+      }
+    } catch (error) {
+      console.error('Error checking delivery access:', error);
+      return {
+        canAccess: false,
+        message: 'Error checking access'
+      };
+    }
+  }
+
   async function deleteBranchStore(index) {
     if (!currentUser) throw new Error('No user');
     const res = await fetch(`${API_BASE_URL}/users/${currentUser.uid}/branch-stores/${index}`, { method: 'DELETE' });
@@ -905,7 +955,9 @@ export function AuthProvider({ children }) {
     markNotificationRead,
     markAllNotificationsRead,
     deleteNotification,
-    clearNotifications
+    clearNotifications,
+    getDeliveryVerificationStatus,
+    checkDeliveryAccess
   };
 
   return (

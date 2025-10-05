@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import DeliveryVerificationGuard from "../components/DeliveryVerificationGuard";
 
 // Minimal delivery partner dashboard inspired by provided design
 export default function DeliveryDashboard() {
@@ -151,7 +152,8 @@ export default function DeliveryDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <DeliveryVerificationGuard>
+      <div className="min-h-screen bg-gray-50">
       {/* Sidebar */}
       <aside className="fixed left-0 top-16 md:top-20 bottom-0 w-64 bg-white border-r border-gray-200 flex flex-col z-20">
         <div className="px-4 py-5 border-b">
@@ -601,5 +603,6 @@ export default function DeliveryDashboard() {
         )}
       </div>
     </div>
+    </DeliveryVerificationGuard>
   );
 }
