@@ -5,7 +5,12 @@
     "install:all": "npm --prefix backend install && npm --prefix frontend install",
     "dev": "npm-run-all -p dev:backend dev:frontend",
     "dev:backend": "npm --prefix backend run dev",
-    "dev:frontend": "npm --prefix frontend run dev"
+    "dev:frontend": "npm --prefix frontend run dev",
+    "docker:build": "docker build -t freshcart .",
+    "docker:run": "docker run -p 80:80 --env-file .env freshcart",
+    "docker:test": "bash test-docker.sh",
+    "docker:compose:up": "docker-compose up -d",
+    "docker:compose:down": "docker-compose down"
   },
   "devDependencies": {
     "npm-run-all": "^4.1.5"

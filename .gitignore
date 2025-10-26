@@ -1,0 +1,5 @@
+test-docker.sh
+test-docker.bat
+deploy-aws.sh
+.env
+nodw_modules

@@ -272,6 +272,62 @@ FreshCart/
 - **CORS**: Strict origin policy
 - **CSRF Protection**: Anti-forgery tokens
 
+## 🛠️ Development
+
+### Docker Deployment
+
+This project includes Docker configuration for easy deployment. The unified Dockerfile builds both the frontend and backend together, making it perfect for deployment on platforms like AWS.
+
+To build and run the application using Docker:
+
+```bash
+# Build the Docker image
+docker build -t freshcart .
+
+# Run the container
+docker run -p 80:80 --env-file .env freshcart
+```
+
+### Docker Compose
+
+For easier management with MongoDB included:
+
+```bash
+# Start all services
+docker-compose up -d
+
+# Stop all services
+docker-compose down
+```
+
+### AWS Deployment Options
+
+1. **AWS ECS (Elastic Container Service)**
+   - Create an ECS cluster
+   - Push your Docker image to Amazon ECR
+   - Create a task definition using your image
+   - Set up a service to run your task
+
+2. **AWS Fargate**
+   - Similar to ECS but serverless
+   - No need to manage EC2 instances
+   - Pay only for the resources you use
+
+3. **AWS Elastic Beanstalk**
+   - Supports Docker deployments
+   - Easy to use with docker-compose.yml
+   - Automatic scaling and load balancing
+
+### Environment Variables
+
+Make sure to set the following environment variables in your AWS environment:
+
+- `MONGODB_URI` - Your MongoDB connection string
+- `JWT_SECRET` - Your JWT secret key
+- `FIREBASE_PROJECT_ID` - Your Firebase project ID
+- `FIREBASE_CLIENT_EMAIL` - Your Firebase client email
+- `FIREBASE_PRIVATE_KEY` - Your Firebase private key
+
 ## 🤝 Contributing
 
 1. Fork the repository
