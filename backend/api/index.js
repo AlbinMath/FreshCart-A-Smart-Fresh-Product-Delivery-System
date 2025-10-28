@@ -57,14 +57,76 @@ app.use((req, res, next) => {
   next();
 });
 
+// Store MongoDB connection state
+let mongoConnected = false;
+let mongoConnectionError = null;
+
 // MongoDB Connection
 if (process.env.MONGODB_URI) {
-  mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log('✅ MongoDB Connected'))
-    .catch(err => console.error('❌ MongoDB Connection Error:', err));
+  mongoose.connect(process.env.MONGODB_URI, {
+    serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of default 30s
+    socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+  })
+    .then(() => {
+      console.log('✅ MongoDB Connected');
+      mongoConnected = true;
+      mongoConnectionError = null;
+    })
+    .catch(err => {
+      console.error('❌ MongoDB Connection Error:', err);
+      mongoConnected = false;
+      mongoConnectionError = err;
+    });
 } else {
   console.log('⚠️  MongoDB URI not set - skipping connection');
 }
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'FreshCart API is running on Vercel',
+    mongoConnected,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Test endpoint to verify API is working
+app.get('/api/test', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'API test endpoint working',
+    mongoConnected,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Middleware to check MongoDB connection before handling requests
+app.use('/api/*', (req, res, next) => {
+  // Skip connection check for health and test endpoints
+  if (req.path === '/health' || req.path === '/api/test') {
+    return next();
+  }
+  
+  // If MongoDB connection failed, return error
+  if (mongoConnectionError) {
+    return res.status(500).json({
+      success: false,
+      message: 'Database connection failed',
+      error: mongoConnectionError.message
+    });
+  }
+  
+  // If MongoDB not yet connected, wait a bit more
+  if (!mongoConnected) {
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection initializing, please try again in a moment'
+    });
+  }
+  
+  next();
+});
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -89,24 +151,6 @@ app.use('/api/delivery-verification', deliveryVerificationRoutes); // Delivery v
 
 // Basic Route
 app.get('/', (req, res) => res.send('FreshCart API Running on Vercel'));
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'FreshCart API is running on Vercel',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Test endpoint to verify API is working
-app.get('/api/test', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'API test endpoint working',
-    timestamp: new Date().toISOString()
-  });
-});
 
 // Log all API requests
 app.use('/api/*', logActivity('api-request', 'system', {

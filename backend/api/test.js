@@ -20,5 +20,6 @@ app.get('/test', (req, res) => {
   });
 });
 
+// Export the app for Vercel serverless functions
 export default app;
 export const handler = serverless(app);
