@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import EmailVerification from '../components/EmailVerification';
-import { cartService } from '../../../backend/services/cartService';
+import { cartService } from '../services/cartService';
 
 function Home() {
   const { currentUser, logout, getUserProfile } = useAuth();

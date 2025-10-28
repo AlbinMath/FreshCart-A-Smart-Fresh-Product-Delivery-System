@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 
-import { getLicenseStatus } from '../../../backend/services/sellerService';
+import { getLicenseStatus } from '../services/sellerService';
 
 import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/apiService';

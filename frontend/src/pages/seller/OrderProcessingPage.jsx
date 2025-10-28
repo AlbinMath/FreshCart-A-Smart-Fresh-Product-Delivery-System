@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import apiService from '../../../../backend/services/apiService';
+import apiService from '../../services/apiService';
 
 const OrderProcessingPage = () => {
   const { currentUser } = useAuth();

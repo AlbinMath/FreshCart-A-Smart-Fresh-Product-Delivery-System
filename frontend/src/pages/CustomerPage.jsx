@@ -6,7 +6,7 @@ import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
-import { orderService } from '../../../backend/services/orderService';
+import { orderService } from '../services/orderService';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from "react-hot-toast";
 

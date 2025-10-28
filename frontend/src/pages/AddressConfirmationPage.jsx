@@ -12,10 +12,11 @@ import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { MapPicker } from "../components/MapPicker";
-import { addressService } from '../../../backend/services/addressService';
+import { addressService } from '../services/addressService';
 import { useAuth } from '../contexts/AuthContext';
-import { cartService } from '../../../backend/services/cartService';
-import { calculateDeliveryFee, calculateTotal } from '../../../backend/utils/deliveryUtils';
+import { cartService } from '../services/cartService';
+import { calculateDeliveryFee, calculateTotal } from '../utils/deliveryUtils';
+import apiService from '../services/apiService';
 
 export function AddressConfirmationPage() {
   const { currentUser } = useAuth();
@@ -394,9 +395,9 @@ export function AddressConfirmationPage() {
           )}
           
       </div>
+      </div>
         
     </div>
-  </div>
   );
 }
 

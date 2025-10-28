@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { Label } from "../components/ui/label";
 import { Separator } from "../components/ui/separator";
-import { orderService } from '../../../backend/services/orderService';
+import { orderService } from '../services/orderService';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function PaymentPage() {

@@ -8,7 +8,7 @@
  * @param {number} subtotal - The subtotal amount in rupees
  * @returns {number} - The delivery fee in rupees
  */
-function calculateDeliveryFee(subtotal) {
+export function calculateDeliveryFee(subtotal) {
   if (subtotal <= 200) {
     return subtotal * 0.4;
   } else if (subtotal <= 400) {
@@ -26,7 +26,7 @@ function calculateDeliveryFee(subtotal) {
  * @param {number} subtotal - The subtotal amount in rupees
  * @returns {Object} - Object containing subtotal, deliveryFee, and totalAmount
  */
-function calculateTotal(subtotal) {
+export function calculateTotal(subtotal) {
   const deliveryFee = calculateDeliveryFee(subtotal);
   const totalAmount = subtotal + deliveryFee;
   return {
@@ -35,8 +35,3 @@ function calculateTotal(subtotal) {
     totalAmount: Math.round(totalAmount * 100) / 100,
   };
 }
-
-export {
-  calculateDeliveryFee,
-  calculateTotal,
-};
