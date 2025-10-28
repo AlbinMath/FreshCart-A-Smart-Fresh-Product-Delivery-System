@@ -87,10 +87,17 @@ function Cart() {
   const updateQuantity = async (itemId, newQuantity) => {
     if (newQuantity < 1) return;
 
+    // Validate itemId format
+    if (!itemId || typeof itemId !== 'string') {
+      console.error('Invalid item ID:', itemId);
+      setError('Invalid item ID');
+      return;
+    }
+
     setUpdatingItems(prev => new Set(prev).add(itemId));
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/cart/update/${itemId}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/cart/update/${encodeURIComponent(itemId)}`, {
         method: 'PUT',
         headers: {
           'x-uid': currentUser.uid,
@@ -103,6 +110,7 @@ function Cart() {
       if (data.success) {
         setCart(data.cart);
       } else {
+        console.error('Failed to update quantity:', data.message);
         setError(data.message || 'Failed to update quantity');
       }
     } catch (err) {

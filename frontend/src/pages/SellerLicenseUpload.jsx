@@ -13,6 +13,7 @@ function SellerLicenseUpload() {
   const [licenseNumber, setLicenseNumber] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [currentStatus, setCurrentStatus] = useState(null);
+  const [loadingStatus, setLoadingStatus] = useState(true);
 
   useEffect(() => {
     // Pre-fill license number from local profile only; no backend role checks here
@@ -21,16 +22,32 @@ function SellerLicenseUpload() {
       setLicenseNumber(profile.businessLicense);
     }
 
-    // Load current status (non-blocking)
+    // Load current status (non-blocking) - this is a public endpoint, no auth required
     loadLicenseStatus();
   }, [getUserProfile]);
 
   const loadLicenseStatus = async () => {
     try {
+<<<<<<< HEAD
       const status = await getLicenseStatus();
       setCurrentStatus(status);
+=======
+      const profile = getUserProfile();
+      if (!profile) return;
+      
+      // This is a public endpoint, so we pass false for requireAuth
+      const response = await apiService.get(`/license/status?userId=${profile.uid}`, {}, false);
+      setCurrentStatus(response.licenseInfo);
+      
+      // If license is already approved, redirect to seller dashboard
+      if (response.licenseInfo && response.licenseInfo.status === 'approved') {
+        navigate('/seller');
+      }
+>>>>>>> 087215b (last commit)
     } catch (error) {
       console.error('Error loading license status:', error);
+    } finally {
+      setLoadingStatus(false);
     }
   };
 
@@ -135,6 +152,41 @@ function SellerLicenseUpload() {
         return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Not Uploaded</span>;
     }
   };
+
+  // Show loading state while checking license status
+  if (loadingStatus) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 py-8 px-4 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Checking license status...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If license is approved, don't show the upload form
+  if (currentStatus && currentStatus.status === 'approved') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 py-8 px-4 flex items-center justify-center">
+        <div className="max-w-md bg-white rounded-lg shadow-lg p-8 text-center">
+          <div className="text-green-600 mx-auto w-16 h-16 mb-4">
+            <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">License Approved</h2>
+          <p className="text-gray-600 mb-6">Your business license has already been approved. You can now access all seller features.</p>
+          <button
+            onClick={() => navigate('/seller')}
+            className="px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
+          >
+            Go to Seller Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 py-8 px-4">

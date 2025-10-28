@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import Cart from '../models/Cart.js';
 import User from '../models/User.js';
 import { getSellerProductModel } from '../models/Product.js';
@@ -134,13 +135,28 @@ router.put('/cart/update/:itemId', requireCustomer, async (req, res) => {
     const { itemId } = req.params;
     const { quantity } = req.body;
 
-    if (quantity < 1) {
+    // Validate inputs
+    if (!itemId || typeof itemId !== 'string') {
+      return res.status(400).json({ success: false, message: 'Invalid item ID' });
+    }
+
+    if (quantity === undefined || quantity === null || isNaN(quantity)) {
+      return res.status(400).json({ success: false, message: 'Quantity is required and must be a number' });
+    }
+
+    const parsedQuantity = parseInt(quantity);
+    if (parsedQuantity < 1) {
       return res.status(400).json({ success: false, message: 'Quantity must be at least 1' });
     }
 
     const cart = await Cart.findOne({ customerUid: req.customer.uid });
     if (!cart) {
       return res.status(404).json({ success: false, message: 'Cart not found' });
+    }
+
+    // Validate that itemId is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(itemId)) {
+      return res.status(400).json({ success: false, message: 'Invalid item ID format' });
     }
 
     const item = cart.items.id(itemId);
@@ -156,14 +172,14 @@ router.put('/cart/update/:itemId', requireCustomer, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Product no longer available' });
     }
 
-    if (product.stock < quantity) {
+    if (product.stock < parsedQuantity) {
       return res.status(400).json({
         success: false,
         message: `Insufficient stock. Available: ${product.stock}`
       });
     }
 
-    item.quantity = quantity;
+    item.quantity = parsedQuantity;
     await cart.save();
 
     res.json({ success: true, cart, message: 'Cart updated successfully' });

@@ -224,9 +224,6 @@ export function AuthProvider({ children }) {
   // Logout function
   async function logout() {
     try {
-      // Clear auth service state
-      authService.clearAuthState();
-      
       // Clear all localStorage data
       if (currentUser) {
         localStorage.removeItem(`userProfile_${currentUser.uid}`);
@@ -249,7 +246,6 @@ export function AuthProvider({ children }) {
     } catch (error) {
       console.error('Logout error:', error);
       // Even if there's an error, clear local storage and redirect
-      authService.clearAuthState();
       localStorage.clear();
       window.location.href = '/login';
     }

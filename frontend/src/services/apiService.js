@@ -21,7 +21,8 @@ class ApiService {
     try {
       const user = auth.currentUser;
       if (user) {
-        token = await user.getIdToken();
+        // Force refresh token to prevent "Invalid token" errors
+        token = await user.getIdToken(true);
       }
     } catch (error) {
       console.error('Error getting Firebase ID token:', error);
@@ -60,6 +61,14 @@ class ApiService {
     }
 
     if (!response.ok) {
+      // For 401 errors, check if it's related to token issues
+      if (response.status === 401) {
+        const error = data.message || data.error || 'Authentication failed';
+        // If it's an invalid token error, throw a specific error
+        if (error.includes('Invalid token') || error.includes('token')) {
+          throw new Error('Invalid token');
+        }
+      }
       const error = data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
       throw new Error(error);
     }
@@ -71,10 +80,19 @@ class ApiService {
    * GET request
    * @param {string} endpoint - API endpoint
    * @param {Object} options - Additional options
+   * @param {boolean} requireAuth - Whether authentication is required (default: true)
    * @returns {Promise<Object>} Response data
    */
-  async get(endpoint, options = {}) {
-    const headers = await this.getAuthHeaders();
+  async get(endpoint, options = {}, requireAuth = true) {
+    let headers = {};
+    if (requireAuth) {
+      headers = await this.getAuthHeaders();
+    } else {
+      // For public endpoints, explicitly ensure no auth headers are sent
+      headers = {
+        'Content-Type': 'application/json'
+      };
+    }
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'GET',
       headers: { ...headers, ...options.headers },
@@ -88,10 +106,19 @@ class ApiService {
    * @param {string} endpoint - API endpoint
    * @param {Object} data - Request body
    * @param {Object} options - Additional options
+   * @param {boolean} requireAuth - Whether authentication is required (default: true)
    * @returns {Promise<Object>} Response data
    */
-  async post(endpoint, data = {}, options = {}) {
-    const headers = await this.getAuthHeaders();
+  async post(endpoint, data = {}, options = {}, requireAuth = true) {
+    let headers = {};
+    if (requireAuth) {
+      headers = await this.getAuthHeaders();
+    } else {
+      // For public endpoints, explicitly ensure no auth headers are sent
+      headers = {
+        'Content-Type': 'application/json'
+      };
+    }
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'POST',
       headers: { ...headers, ...options.headers },
@@ -106,10 +133,19 @@ class ApiService {
    * @param {string} endpoint - API endpoint
    * @param {Object} data - Request body
    * @param {Object} options - Additional options
+   * @param {boolean} requireAuth - Whether authentication is required (default: true)
    * @returns {Promise<Object>} Response data
    */
-  async put(endpoint, data = {}, options = {}) {
-    const headers = await this.getAuthHeaders();
+  async put(endpoint, data = {}, options = {}, requireAuth = true) {
+    let headers = {};
+    if (requireAuth) {
+      headers = await this.getAuthHeaders();
+    } else {
+      // For public endpoints, explicitly ensure no auth headers are sent
+      headers = {
+        'Content-Type': 'application/json'
+      };
+    }
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'PUT',
       headers: { ...headers, ...options.headers },
@@ -123,10 +159,19 @@ class ApiService {
    * DELETE request
    * @param {string} endpoint - API endpoint
    * @param {Object} options - Additional options
+   * @param {boolean} requireAuth - Whether authentication is required (default: true)
    * @returns {Promise<Object>} Response data
    */
-  async delete(endpoint, options = {}) {
-    const headers = await this.getAuthHeaders();
+  async delete(endpoint, options = {}, requireAuth = true) {
+    let headers = {};
+    if (requireAuth) {
+      headers = await this.getAuthHeaders();
+    } else {
+      // For public endpoints, explicitly ensure no auth headers are sent
+      headers = {
+        'Content-Type': 'application/json'
+      };
+    }
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'DELETE',
       headers: { ...headers, ...options.headers },
@@ -140,10 +185,19 @@ class ApiService {
    * @param {string} endpoint - API endpoint
    * @param {Object} data - Request body
    * @param {Object} options - Additional options
+   * @param {boolean} requireAuth - Whether authentication is required (default: true)
    * @returns {Promise<Object>} Response data
    */
-  async patch(endpoint, data = {}, options = {}) {
-    const headers = await this.getAuthHeaders();
+  async patch(endpoint, data = {}, options = {}, requireAuth = true) {
+    let headers = {};
+    if (requireAuth) {
+      headers = await this.getAuthHeaders();
+    } else {
+      // For public endpoints, explicitly ensure no auth headers are sent
+      headers = {
+        'Content-Type': 'application/json'
+      };
+    }
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: 'PATCH',
       headers: { ...headers, ...options.headers },

@@ -3,17 +3,51 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { authenticateToken } from '../middleware/auth.js';
+import admin from '../config/firebaseAdmin.js';
 import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 
 const router = express.Router();
 
 // Try authenticate if Authorization header is present; otherwise continue
+// This is a simplified version that doesn't send responses
 const tryAuth = async (req, res, next) => {
   try {
     const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+    let idToken = null;
+
     if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-      return authenticateToken(req, res, next);
+      idToken = authHeader.slice(7);
+    }
+
+    if (idToken) {
+      try {
+        // Verify Firebase token
+        const decoded = await admin.auth().verifyIdToken(idToken, true);
+
+        // Attach decoded info to request
+        req.user = {
+          uid: decoded.uid,
+          email: decoded.email,
+          email_verified: decoded.email_verified,
+          // Optional custom claims: role, userId if you set them
+          role: decoded.role || decoded.claims?.role,
+          id: decoded.userId || decoded.claims?.userId,
+        };
+
+        // If database userId not present, try to look up by uid
+        if (!req.user.id) {
+          const dbUser = await User.findOne({ uid: decoded.uid }).select('_id role email');
+          if (dbUser) {
+            req.user.id = dbUser._id.toString();
+            req.user.role = req.user.role || dbUser.role;
+            req.user.email = req.user.email || dbUser.email;
+          }
+        }
+      } catch (error) {
+        // If token verification fails, continue without user
+        console.log('Token verification failed, continuing without user:', error.message);
+      }
     }
     return next();
   } catch (e) {
@@ -302,17 +336,29 @@ router.put('/update', requireSeller, upload.single('licenseFile'), async (req, r
 
 // @route   GET /api/license/status
 // @desc    Get seller's license status
-// @access  Private (Seller)
-router.get('/status', requireSeller, async (req, res) => {
+// @access  Public (no authentication required)
+router.get('/status/:userId', async (req, res) => {
   try {
-    const seller = await User.findById(req.sellerId)
+    console.log('License status request received for userId:', req.params.userId);
+    const { userId } = req.params;
+    
+    if (!userId) {
+      console.log('No userId provided in request');
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+
+    console.log('Looking up user with ID:', userId);
+    // Use findOne with uid field instead of findById since userId is a Firebase UID
+    const seller = await User.findOne({ uid: userId })
       .select('licenseInfo')
       .lean();
 
     if (!seller) {
+      console.log('Seller not found for ID:', userId);
       return res.status(404).json({ success: false, message: 'Seller not found' });
     }
 
+    console.log('Found seller license info:', seller.licenseInfo);
     res.json({ 
       success: true, 
       licenseInfo: seller.licenseInfo || null 
@@ -326,6 +372,49 @@ router.get('/status', requireSeller, async (req, res) => {
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
+});
+
+// Alternative route using query parameter
+router.get('/status', async (req, res) => {
+  try {
+    console.log('License status request received with query params:', req.query);
+    const { userId } = req.query;
+    
+    if (!userId) {
+      console.log('No userId provided in query params');
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+
+    console.log('Looking up user with ID:', userId);
+    // Use findOne with uid field instead of findById since userId is a Firebase UID
+    const seller = await User.findOne({ uid: userId })
+      .select('licenseInfo')
+      .lean();
+
+    if (!seller) {
+      console.log('Seller not found for ID:', userId);
+      return res.status(404).json({ success: false, message: 'Seller not found' });
+    }
+
+    console.log('Found seller license info:', seller.licenseInfo);
+    res.json({ 
+      success: true, 
+      licenseInfo: seller.licenseInfo || null 
+    });
+
+  } catch (error) {
+    console.error('Error getting license status:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Test route to verify the endpoint is working
+router.get('/test', async (req, res) => {
+  res.json({ success: true, message: 'License routes are working' });
 });
 
 // @route   POST /api/license/link

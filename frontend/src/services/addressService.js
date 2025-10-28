@@ -23,6 +23,22 @@ export const addressService = {
   // Add new address
   addAddress: async (uid, addressData) => {
     const token = localStorage.getItem('token');
+    
+    // Transform frontend address data to match backend schema
+    const transformedData = {
+      type: addressData.type || 'home',
+      name: addressData.name,
+      phone: addressData.phone,
+      street: addressData.address, // Map 'address' to 'street'
+      landmark: addressData.landmark,
+      city: addressData.city,
+      state: addressData.state,
+      zipCode: addressData.pincode, // Map 'pincode' to 'zipCode'
+      country: addressData.country || 'India',
+      coordinates: addressData.coordinates,
+      isDefault: addressData.isDefault || false
+    };
+
     const response = await fetch(`${API_BASE_URL}/addresses/add`, {
       method: 'POST',
       headers: {
@@ -31,7 +47,7 @@ export const addressService = {
         'Content-Type': 'application/json'
       },
       credentials: 'include',
-      body: JSON.stringify(addressData)
+      body: JSON.stringify(transformedData)
     });
 
     const data = await response.json();
@@ -44,6 +60,22 @@ export const addressService = {
   // Update address
   updateAddress: async (uid, addressId, addressData) => {
     const token = localStorage.getItem('token');
+    
+    // Transform frontend address data to match backend schema
+    const transformedData = {
+      type: addressData.type || 'home',
+      name: addressData.name,
+      phone: addressData.phone,
+      street: addressData.address, // Map 'address' to 'street'
+      landmark: addressData.landmark,
+      city: addressData.city,
+      state: addressData.state,
+      zipCode: addressData.pincode, // Map 'pincode' to 'zipCode'
+      country: addressData.country || 'India',
+      coordinates: addressData.coordinates,
+      isDefault: addressData.isDefault || false
+    };
+
     const response = await fetch(`${API_BASE_URL}/addresses/update/${addressId}`, {
       method: 'PUT',
       headers: {
@@ -52,7 +84,7 @@ export const addressService = {
         'Content-Type': 'application/json'
       },
       credentials: 'include',
-      body: JSON.stringify(addressData)
+      body: JSON.stringify(transformedData)
     });
 
     const data = await response.json();

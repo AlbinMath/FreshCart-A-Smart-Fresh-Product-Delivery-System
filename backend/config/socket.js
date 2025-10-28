@@ -5,7 +5,7 @@ let io;
 const init = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+      origin: process.env.FRONTEND_URL || ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
       methods: ['GET', 'POST'],
       credentials: true
     }
