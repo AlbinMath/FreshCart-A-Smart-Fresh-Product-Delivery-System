@@ -99,6 +99,15 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Test endpoint to verify API is working
+app.get('/api/test', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'API test endpoint working',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Log all API requests
 app.use('/api/*', logActivity('api-request', 'system', {
   captureResponse: true,
@@ -127,7 +136,7 @@ app.use((err, req, res, next) => {
 
   // Send error response
   const statusCode = err.statusCode || 500;
-  const message = statusCode === 500 ? 'Internal Server Error' : err.message;
+  const message = statusCode === 500 ? 'Internal server error' : err.message;
   
   res.status(statusCode).json({
     success: false,

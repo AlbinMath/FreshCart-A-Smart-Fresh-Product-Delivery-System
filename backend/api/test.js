@@ -1,9 +1,24 @@
-// Simple test function for Vercel
-export default function handler(request, response) {
-  response.status(200).json({
+// Simple test endpoint for Vercel
+import express from 'express';
+import serverless from 'serverless-http';
+
+const app = express();
+
+app.get('/api/test', (req, res) => {
+  res.status(200).json({
     success: true,
-    message: 'Vercel backend is working!',
-    timestamp: new Date().toISOString(),
-    vercel: process.env.NOW_REGION || process.env.VERCEL ? true : false
+    message: 'Test endpoint working',
+    timestamp: new Date().toISOString()
   });
-}
+});
+
+app.get('/test', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Root test endpoint working',
+    timestamp: new Date().toISOString()
+  });
+});
+
+export default app;
+export const handler = serverless(app);

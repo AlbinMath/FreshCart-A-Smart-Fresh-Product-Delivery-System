@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import EmailVerification from '../components/EmailVerification';
 import { cartService } from '../services/cartService';
+import apiService from '../services/apiService';
 
 function Home() {
   const { currentUser, logout, getUserProfile } = useAuth();
@@ -41,13 +42,11 @@ function Home() {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        // Always use public endpoint without includeAll to enforce approved + in-stock filtering on backend
-        const url = `${import.meta.env.VITE_API_BASE_URL}/public/products`;
-        const response = await fetch(url);
-        const data = await response.json();
+        // Use the apiService for consistent API calls
+        const response = await apiService.get('/public/products', {}, false);
         
-        if (data.success) {
-          setProducts(data.products);
+        if (response.success) {
+          setProducts(response.products);
         } else {
           setError('Failed to fetch products from server');
         }
@@ -61,8 +60,6 @@ function Home() {
 
     fetchProducts();
   }, []);
-
-
 
   // Filter products based on category and search term; always require stock > 0
   const filteredProducts = products
@@ -415,5 +412,3 @@ function Home() {
 }
 
 export default Home;
-
-

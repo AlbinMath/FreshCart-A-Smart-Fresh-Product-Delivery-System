@@ -8,6 +8,10 @@
     {
       "src": "api/auth.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "api/test.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
@@ -33,6 +37,10 @@
     },
     {
       "src": "/api/products(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/public(.*)",
       "dest": "/api/index.js"
     },
     {
@@ -70,6 +78,10 @@
     {
       "src": "/api/farmer(.*)",
       "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/test(.*)",
+      "dest": "/api/test.js"
     },
     {
       "src": "/(.*)",
