@@ -444,29 +444,34 @@ export function AuthProvider({ children }) {
     return sendPasswordResetEmail(auth, email);
   }
 
-  // Get user profile
+  // Get user profile from localStorage
   function getUserProfile() {
     if (!currentUser) return null;
-    const profile = localStorage.getItem(`userProfile_${currentUser.uid}`);
-    if (profile) {
-      return JSON.parse(profile);
+    
+    try {
+      const profile = localStorage.getItem(`userProfile_${currentUser.uid}`);
+      return profile ? JSON.parse(profile) : null;
+    } catch (error) {
+      console.error('Error parsing user profile:', error);
+      return null;
     }
+  }
+
+  // Get user profile from backend
+  async function fetchUserProfile() {
+    if (!currentUser) return null;
     
-    // If no profile in localStorage, create a basic one from Firebase user
-    const basicProfile = {
-      uid: currentUser.uid,
-      email: currentUser.email,
-      name: currentUser.displayName || currentUser.email?.split('@')[0] || 'User',
-      role: 'customer', // default role
-      profilePicture: currentUser.photoURL,
-      provider: currentUser.providerData?.[0]?.providerId || 'email',
-      emailVerified: currentUser.emailVerified,
-      createdAt: new Date().toISOString()
-    };
-    
-    // Store the basic profile for future use
-    localStorage.setItem(`userProfile_${currentUser.uid}`, JSON.stringify(basicProfile));
-    return basicProfile;
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/${currentUser.uid}`);
+      if (response.ok) {
+        const data = await response.json();
+        return data.user;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      return null;
+    }
   }
 
   // Upgrade role to seller and persist seller fields in backend
@@ -610,23 +615,6 @@ export function AuthProvider({ children }) {
     } catch (error) {
       console.error('Password change error:', error);
       throw error;
-    }
-  }
-
-  // Get user profile from backend
-  async function fetchUserProfile() {
-    if (!currentUser) return null;
-    
-    try {
-      const response = await fetch(`${API_BASE_URL}/users/${currentUser.uid}`);
-      if (response.ok) {
-        const data = await response.json();
-        return data.user;
-      }
-      return null;
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      return null;
     }
   }
 

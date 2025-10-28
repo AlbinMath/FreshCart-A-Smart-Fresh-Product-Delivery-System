@@ -33,8 +33,7 @@ export function AddressConfirmationPage() {
   const [newAddress, setNewAddress] = useState({type: 'home', name: '', phone: '', address: '', landmark: '', city: '', state: '', pincode: '', coordinates: null});
   const [isAddingAddress, setIsAddingAddress] = useState(false);
 
-<<<<<<< HEAD
-=======
+
   // Create a cart service using apiService
   const cartService = {
     getCart: async (uid) => {
@@ -44,7 +43,7 @@ export function AddressConfirmationPage() {
       return response;
     }
   };
->>>>>>> 087215b (last commit)
+
 
   // Fetch saved addresses and cart
   useEffect(() => {
@@ -401,8 +400,7 @@ export function AddressConfirmationPage() {
   );
 }
 
-<<<<<<< HEAD
 export default AddressConfirmationPage
-=======
-export default AddressConfirmationPage;
->>>>>>> 087215b (last commit)
+
+
+

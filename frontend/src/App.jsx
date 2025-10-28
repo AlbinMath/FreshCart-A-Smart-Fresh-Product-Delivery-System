@@ -58,9 +58,7 @@ import ProcessingPage from "./pages/ProcessingPage";
 import CustomerPage from "./pages/CustomerPage";
 import AdminSellerLicense from "./pages/admin/AdminSellerLicense";
 import AdminDeliveryVerification from "./pages/admin/AdminDeliveryVerification";
-import AdminNotifications from "./pages/AdminNotifications";
-import DeliveryNotifications from "./pages/DeliveryNotifications";
-import SellerNotifications from "./pages/SellerNotifications";
+
 import FarmerProducts from "./pages/FarmerProducts";
 import FarmerProductSubmission from "./pages/FarmerProductSubmission";
 import EditFarmerProduct from "./pages/EditFarmerProduct";

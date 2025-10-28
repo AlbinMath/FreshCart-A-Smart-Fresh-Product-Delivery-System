@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-<<<<<<< HEAD
 import { useAuth } from './AuthContext';
 import { 
   getNotifications, 
@@ -10,27 +9,20 @@ import {
   getNotificationStats,
   updateNotificationPreferences,
   getUnreadCount
-} from '../../../backend/services/notificationService';
-
-const NotificationContext = createContext();
-
-export function useNotifications() {
-=======
+} from '../services/notificationService';
 import { toast } from 'react-hot-toast';
 
 const NotificationContext = createContext();
 
 export const useNotifications = () => {
->>>>>>> 087215b (last commit)
   const context = useContext(NotificationContext);
   if (!context) {
     throw new Error('useNotifications must be used within a NotificationProvider');
   }
   return context;
-<<<<<<< HEAD
-}
+};
 
-export function NotificationProvider({ children }) {
+export const NotificationProvider = ({ children }) => {
   const { currentUser, loading: authLoading } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -282,60 +274,10 @@ export function NotificationProvider({ children }) {
       loadUnreadCount();
       loadStats();
     }
-=======
-};
-
-export const NotificationProvider = ({ children }) => {
-  const [notifications, setNotifications] = useState([]);
-
-  useEffect(() => {
-    // Load notifications from localStorage or API if needed
-    const savedNotifications = localStorage.getItem('notifications');
-    if (savedNotifications) {
-      setNotifications(JSON.parse(savedNotifications));
-    }
-  }, []);
-
-  const addNotification = (notification) => {
-    const newNotification = {
-      id: Date.now(),
-      timestamp: new Date().toISOString(),
-      ...notification
-    };
-    
-    setNotifications(prev => {
-      const updated = [newNotification, ...prev];
-      localStorage.setItem('notifications', JSON.stringify(updated));
-      return updated;
-    });
-    
-    // Show toast notification
-    if (notification.type === 'error') {
-      toast.error(notification.message);
-    } else if (notification.type === 'success') {
-      toast.success(notification.message);
-    } else {
-      toast(notification.message);
-    }
-  };
-
-  const removeNotification = (id) => {
-    setNotifications(prev => {
-      const updated = prev.filter(notification => notification.id !== id);
-      localStorage.setItem('notifications', JSON.stringify(updated));
-      return updated;
-    });
-  };
-
-  const clearNotifications = () => {
-    setNotifications([]);
-    localStorage.removeItem('notifications');
->>>>>>> 087215b (last commit)
   };
 
   const value = {
     notifications,
-<<<<<<< HEAD
     unreadCount,
     loading,
     stats,
@@ -349,11 +291,6 @@ export const NotificationProvider = ({ children }) => {
     refreshNotifications,
     loadUnreadCount,
     loadStats
-=======
-    addNotification,
-    removeNotification,
-    clearNotifications
->>>>>>> 087215b (last commit)
   };
 
   return (
@@ -361,9 +298,4 @@ export const NotificationProvider = ({ children }) => {
       {children}
     </NotificationContext.Provider>
   );
-<<<<<<< HEAD
-}
-
-=======
 };
->>>>>>> 087215b (last commit)

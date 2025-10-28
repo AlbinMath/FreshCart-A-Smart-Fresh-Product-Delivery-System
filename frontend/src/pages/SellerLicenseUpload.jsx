@@ -28,10 +28,10 @@ function SellerLicenseUpload() {
 
   const loadLicenseStatus = async () => {
     try {
-<<<<<<< HEAD
+
       const status = await getLicenseStatus();
       setCurrentStatus(status);
-=======
+
       const profile = getUserProfile();
       if (!profile) return;
       
@@ -43,7 +43,7 @@ function SellerLicenseUpload() {
       if (response.licenseInfo && response.licenseInfo.status === 'approved') {
         navigate('/seller');
       }
->>>>>>> 087215b (last commit)
+
     } catch (error) {
       console.error('Error loading license status:', error);
     } finally {
