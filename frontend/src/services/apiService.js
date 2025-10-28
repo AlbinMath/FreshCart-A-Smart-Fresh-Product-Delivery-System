@@ -5,7 +5,17 @@
 
 import { auth } from '../firebase.js';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+// Determine the correct API base URL based on environment
+const getApiBaseUrl = () => {
+  // For production/vercel deployment, use the production API URL
+  if (import.meta.env.VITE_API_PROD_URL && window && window.location && !window.location.hostname.includes('localhost')) {
+    return import.meta.env.VITE_API_PROD_URL;
+  }
+  // For local development, use the local API URL
+  return import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 class ApiService {
   constructor() {

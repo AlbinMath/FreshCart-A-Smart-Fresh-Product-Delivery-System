@@ -16,6 +16,62 @@
       "dest": "/api/auth.js"
     },
     {
+      "src": "/api/users(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/admin(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/activities(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/upload(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/products(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/cart(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/wallet(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/license(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/notifications(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/addresses(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/payment(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/orders(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/delivery(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/api/farmer(.*)",
+      "dest": "/api/index.js"
+    },
+    {
       "src": "/(.*)",
       "dest": "/api/index.js"
     }

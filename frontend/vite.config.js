@@ -24,7 +24,9 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true
+  },
+  // Define environment variables
+  define: {
+    __APP_ENV__: JSON.stringify(process.env.NODE_ENV || 'development')
   }
 })
-
-

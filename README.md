@@ -177,6 +177,58 @@ FreshCart/
    npm run dev
    ```
 
+## Vercel Deployment
+
+FreshCart can be deployed to Vercel with separate deployments for frontend and backend.
+
+### Environment Configuration for Vercel
+
+#### Frontend Environment Variables
+Create the following files in the `frontend` directory:
+
+1. `.env.local` for local development:
+   ```env
+   VITE_API_BASE_URL=http://localhost:5000/api
+   VITE_API_PROD_URL=https://your-backend-vercel-url.vercel.app/api
+   ```
+
+2. `.env.production` for production:
+   ```env
+   VITE_API_BASE_URL=https://your-backend-vercel-url.vercel.app/api
+   VITE_API_PROD_URL=https://your-backend-vercel-url.vercel.app/api
+   ```
+
+The frontend automatically detects the environment and uses the appropriate API URL:
+- Local development: Uses `VITE_API_BASE_URL`
+- Production: Uses `VITE_API_PROD_URL`
+
+### Backend Vercel Configuration
+
+The backend is configured with a `vercel.json` file that routes API requests properly:
+
+```json
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.js"
+    }
+  ]
+}
+```
+
+### Deployment URLs
+
+- Frontend: https://fresh-cart-two-pi.vercel.app/
+- Backend: https://fresh-cart-a-smart-fresh-product-de.vercel.app/
+
 ## API Documentation
 
 ### Authentication
@@ -372,30 +424,12 @@ Project Link: [https://github.com/yourusername/freshcart](https://github.com/you
 - [ ] Multi-language support
 - [ ] Payment gateway integration
 
-## 🚀 Project Status
-
-### ✅ Completed
-- User authentication & authorization
-- Role-based access control
-- Admin dashboard
-- Real-time notifications
-- Product management
-- Order processing
-- Seller dashboard
-- Store management
-
-### 🚧 In Progress
-- Advanced analytics
-- Mobile app development
-- Multi-language support
-- Payment gateway integration
-
 ### 📅 Planned
-- Advanced search & filters
-- Review system
-- Mobile app (React Native)
-- AI recommendations
-- Delivery integration
+- [ ] Advanced search & filters
+- [ ] Review system
+- [ ] Mobile app (React Native)
+- [ ] AI recommendations
+- [ ] Delivery integration
 
 ## Support
 
@@ -404,4 +438,3 @@ For support and questions, please open an issue in the GitHub repository or cont
 ---
 
 **FreshCart** - Making fresh product delivery smart and accessible! 🥬🚚
-

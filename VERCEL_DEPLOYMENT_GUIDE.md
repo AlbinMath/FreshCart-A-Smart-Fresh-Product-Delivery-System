@@ -1,97 +1,115 @@
 # Vercel Deployment Guide for FreshCart
 
-## Backend Deployment
+This guide explains how to deploy FreshCart to Vercel with separate frontend and backend deployments that work together seamlessly.
 
-### 1. Environment Variables
-After deploying to Vercel, you must set these environment variables in your Vercel project settings:
+## Environment Configuration
 
-```
-MONGODB_URI=your_mongodb_atlas_connection_string
-JWT_SECRET=your_generated_secret_key
-PORT=5000
-FIREBASE_PROJECT_ID=your_firebase_project_id
-FIREBASE_CLIENT_EMAIL=your_firebase_client_email
-FIREBASE_PRIVATE_KEY=your_firebase_private_key
-```
+FreshCart is configured to work in both local development and production environments with automatic environment detection.
 
-### 2. Project Settings
-- **Framework Preset**: Other
-- **Root Directory**: backend
-- **Build Command**: npm run build
-- **Output Directory**: .
+### Frontend Environment Variables
 
-### 3. Important Considerations
+The frontend uses environment variables to determine which API URL to use:
 
-#### File Upload Limitations
-Vercel has an ephemeral file system. Files uploaded to the `uploads/` directory won't persist across deployments.
+1. **Local Development (.env.local)**:
+   ```
+   VITE_API_BASE_URL=http://localhost:5000/api
+   VITE_API_PROD_URL=https://your-backend-vercel-url.vercel.app/api
+   ```
 
-**For production, consider using:**
-- AWS S3
-- Firebase Storage
-- Cloudinary
-- Vercel Blob storage
+2. **Production (.env.production)**:
+   ```
+   VITE_API_BASE_URL=https://your-backend-vercel-url.vercel.app/api
+   VITE_API_PROD_URL=https://your-backend-vercel-url.vercel.app/api
+   ```
 
-#### Cron Jobs
-Scheduled jobs might not work as expected on Vercel due to the serverless environment.
+The frontend automatically detects the environment and uses the appropriate API URL:
+- Local development: Uses `VITE_API_BASE_URL`
+- Production: Uses `VITE_API_PROD_URL`
 
-**Solutions:**
-- Use Vercel's built-in Cron Jobs feature (for Pro accounts)
-- Move scheduled tasks to a separate service
+### How It Works
 
-#### Real-time Features (Socket.IO)
-Socket.IO functionality is limited on Vercel's serverless environment. For production real-time features, consider using a separate WebSocket service.
+In `src/services/apiService.js`, the API base URL is determined dynamically:
 
-## Frontend Deployment
-
-### 1. Environment Variables
-Set these environment variables in your frontend Vercel project:
-
-```
-VITE_FIREBASE_API_KEY=your_firebase_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_firebase_auth_domain
-VITE_FIREBASE_PROJECT_ID=your_firebase_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_firebase_storage_bucket
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_firebase_messaging_sender_id
-VITE_FIREBASE_APP_ID=your_firebase_app_id
-VITE_API_BASE_URL=https://your-backend-project.vercel.app/api
+```javascript
+const getApiBaseUrl = () => {
+  // For production/vercel deployment, use the production API URL
+  if (import.meta.env.VITE_API_PROD_URL && window && window.location && !window.location.hostname.includes('localhost')) {
+    return import.meta.env.VITE_API_PROD_URL;
+  }
+  // For local development, use the local API URL
+  return import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+};
 ```
 
-### 2. Project Settings
-- **Framework Preset**: Vite
-- **Root Directory**: frontend
-- **Build Command**: npm run build
-- **Output Directory**: dist
+## Backend Vercel Configuration
 
-## Post-Deployment Steps
+The backend is configured with a `vercel.json` file that routes API requests properly:
 
-### 1. Update CORS Configuration
-After deploying both frontend and backend, update the CORS configuration in `backend/server.js`:
+```json
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.js"
+    }
+  ]
+}
+```
+
+The backend uses `serverless-http` to convert the Express app into a serverless function that works with Vercel.
+
+## Deployment URLs
+
+After deployment, your applications will be available at:
+
+- Frontend: https://your-frontend-vercel-url.vercel.app/
+- Backend: https://your-backend-vercel-url.vercel.app/
+
+## Testing the Configuration
+
+To verify that your configuration is working correctly:
+
+1. Check the browser console for API requests - they should point to the correct backend URL
+2. Use the ApiTestComponent to test connectivity
+3. Monitor network requests in browser dev tools
+
+## Troubleshooting
+
+### CORS Issues
+
+If you encounter CORS issues, ensure that your backend's CORS configuration includes your frontend URL:
 
 ```javascript
 app.use(cors({
   origin: [
     'http://localhost:5173',
-    'http://localhost:5174', 
-    'http://localhost:5175',
-    'https://your-frontend.vercel.app', // Your deployed frontend URL
-    'https://your-custom-domain.com'   // If you have a custom domain
+    'https://your-frontend-vercel-url.vercel.app',
+    /\.vercel\.app$/  // Allow all Vercel deployments
   ],
   credentials: true
 }));
 ```
 
-### 2. Redeploy
-After making any configuration changes, redeploy both projects on Vercel.
+### API Requests Failing
 
-## Troubleshooting
+If API requests are failing:
 
-### Common Issues
+1. Verify that your backend Vercel URL is correctly set in the frontend environment variables
+2. Check that your backend routes are properly configured in `vercel.json`
+3. Ensure MongoDB connection string is set in Vercel environment variables
+4. Check Vercel logs for any error messages
 
-1. **CORS Errors**: Make sure your frontend URL is added to the CORS configuration
-2. **Environment Variables**: Verify all required environment variables are set
-3. **MongoDB Connection**: Ensure your MongoDB Atlas connection string is correct and IP whitelist is configured
-4. **File Upload Issues**: Remember that uploaded files won't persist on Vercel
-5. **500 Errors**: Check that your server.js file properly exports the app for Vercel
+### Environment Variables Not Loading
 
-### Checking Logs
-Use Vercel's dashboard to check deployment logs and runtime logs for troubleshooting.
+If environment variables are not loading:
+
+1. Ensure you're using the correct file names (`.env.local`, `.env.production`)
+2. Verify that variable names start with `VITE_` for frontend variables
+3. Check that you've added the variables in the Vercel project settings
