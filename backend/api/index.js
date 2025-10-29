@@ -7,28 +7,6 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Import routes
-import authRoutes from '../routes/authRoutes.js';
-import userRoutes from '../routes/userRoutes.js';
-import uploadRoutes from '../routes/uploadRoutes.js';
-import adminRoutes from '../routes/adminRoutes.js';
-import productRoutes from '../routes/productRoutes.js';
-import productUploadRoutes from '../routes/productUploadRoutes.js';
-import activityRoutes from '../routes/activityRoutes.js';
-import walletRoutes from '../routes/walletRoutes.js';
-import deliveryWalletRoutes from '../routes/deliveryWalletRoutes.js';
-import licenseRoutes from '../routes/licenseRoutes.js';
-import cartRoutes from '../routes/cartRoutes.js';
-import paymentRoutes from '../routes/paymentRoutes.js';
-import notificationRoutes from '../routes/notificationRoutes.js';
-import addressRoutes from '../routes/addressRoutes.js';
-import orderRoutes from '../routes/orderRoutes.js';
-import adminLicenseRoutes from '../routes/adminLicenseRoutes.js';
-import sellerFarmerTransactionRoutes from '../routes/sellerFarmerTransactionRoutes.js';
-import deliveryVerificationRoutes from '../routes/deliveryVerificationRoutes.js';
-import farmerProductRoutes from '../routes/farmerProductRoutes.js';
-import { logActivity } from '../middleware/activityLogger.js';
-
 const app = express();
 
 // CORS configuration for Vercel deployment
@@ -128,35 +106,143 @@ app.use('/api/*', (req, res, next) => {
   next();
 });
 
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/activities', activityRoutes);
-app.use('/api/upload', uploadRoutes);
-app.use('/api/upload', productUploadRoutes);
-app.use('/api', productRoutes);
-app.use('/api', cartRoutes); // Cart routes
-app.use('/api/users', walletRoutes); // Wallet routes (regular users)
-app.use('/api/delivery', deliveryWalletRoutes); // Delivery wallet routes
-app.use('/api/license', licenseRoutes); // License routes
-app.use('/api/notifications', notificationRoutes); // Notification routes
-app.use('/api/addresses', addressRoutes); // Address routes
-app.use('/api/payment', paymentRoutes); // Payment routes
-app.use('/api/orders', orderRoutes); // Order routes
-app.use('/api/admin/licenses', adminLicenseRoutes); // Admin license management
-app.use('/api', sellerFarmerTransactionRoutes); // Seller-Farmer transaction routes
-app.use('/api', farmerProductRoutes); // Farmer product routes
-app.use('/api/delivery-verification', deliveryVerificationRoutes); // Delivery verification routes
+// Safely import and use routes
+try {
+  // Import routes
+  import('../routes/authRoutes.js').then(module => {
+    app.use('/api/auth', module.default);
+  }).catch(err => {
+    console.error('Failed to load auth routes:', err);
+  });
+
+  import('../routes/userRoutes.js').then(module => {
+    app.use('/api/users', module.default);
+  }).catch(err => {
+    console.error('Failed to load user routes:', err);
+  });
+
+  import('../routes/adminRoutes.js').then(module => {
+    app.use('/api/admin', module.default);
+  }).catch(err => {
+    console.error('Failed to load admin routes:', err);
+  });
+
+  import('../routes/activityRoutes.js').then(module => {
+    app.use('/api/activities', module.default);
+  }).catch(err => {
+    console.error('Failed to load activity routes:', err);
+  });
+
+  import('../routes/uploadRoutes.js').then(module => {
+    app.use('/api/upload', module.default);
+  }).catch(err => {
+    console.error('Failed to load upload routes:', err);
+  });
+
+  import('../routes/productUploadRoutes.js').then(module => {
+    app.use('/api/upload', module.default);
+  }).catch(err => {
+    console.error('Failed to load product upload routes:', err);
+  });
+
+  import('../routes/productRoutes.js').then(module => {
+    app.use('/api', module.default);
+  }).catch(err => {
+    console.error('Failed to load product routes:', err);
+  });
+
+  import('../routes/cartRoutes.js').then(module => {
+    app.use('/api', module.default);
+  }).catch(err => {
+    console.error('Failed to load cart routes:', err);
+  });
+
+  import('../routes/walletRoutes.js').then(module => {
+    app.use('/api/users', module.default);
+  }).catch(err => {
+    console.error('Failed to load wallet routes:', err);
+  });
+
+  import('../routes/deliveryWalletRoutes.js').then(module => {
+    app.use('/api/delivery', module.default);
+  }).catch(err => {
+    console.error('Failed to load delivery wallet routes:', err);
+  });
+
+  import('../routes/licenseRoutes.js').then(module => {
+    app.use('/api/license', module.default);
+  }).catch(err => {
+    console.error('Failed to load license routes:', err);
+  });
+
+  import('../routes/notificationRoutes.js').then(module => {
+    app.use('/api/notifications', module.default);
+  }).catch(err => {
+    console.error('Failed to load notification routes:', err);
+  });
+
+  import('../routes/addressRoutes.js').then(module => {
+    app.use('/api/addresses', module.default);
+  }).catch(err => {
+    console.error('Failed to load address routes:', err);
+  });
+
+  import('../routes/paymentRoutes.js').then(module => {
+    app.use('/api/payment', module.default);
+  }).catch(err => {
+    console.error('Failed to load payment routes:', err);
+  });
+
+  import('../routes/orderRoutes.js').then(module => {
+    app.use('/api/orders', module.default);
+  }).catch(err => {
+    console.error('Failed to load order routes:', err);
+  });
+
+  import('../routes/adminLicenseRoutes.js').then(module => {
+    app.use('/api/admin/licenses', module.default);
+  }).catch(err => {
+    console.error('Failed to load admin license routes:', err);
+  });
+
+  import('../routes/sellerFarmerTransactionRoutes.js').then(module => {
+    app.use('/api', module.default);
+  }).catch(err => {
+    console.error('Failed to load seller farmer transaction routes:', err);
+  });
+
+  import('../routes/farmerProductRoutes.js').then(module => {
+    app.use('/api', module.default);
+  }).catch(err => {
+    console.error('Failed to load farmer product routes:', err);
+  });
+
+  import('../routes/deliveryVerificationRoutes.js').then(module => {
+    app.use('/api/delivery-verification', module.default);
+  }).catch(err => {
+    console.error('Failed to load delivery verification routes:', err);
+  });
+
+} catch (err) {
+  console.error('Error importing routes:', err);
+}
 
 // Basic Route
 app.get('/', (req, res) => res.send('FreshCart API Running on Vercel'));
 
 // Log all API requests
-app.use('/api/*', logActivity('api-request', 'system', {
-  captureResponse: true,
-  captureRequest: true
-}));
+try {
+  import('../middleware/activityLogger.js').then(module => {
+    app.use('/api/*', module.logActivity('api-request', 'system', {
+      captureResponse: true,
+      captureRequest: true
+    }));
+  }).catch(err => {
+    console.error('Failed to load activity logger:', err);
+  });
+} catch (err) {
+  console.error('Error importing activity logger:', err);
+}
 
 // Catch-all 404 handler for API routes must come after specific routers
 app.use((req, res, next) => {

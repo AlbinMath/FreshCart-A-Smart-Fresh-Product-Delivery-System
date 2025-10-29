@@ -1,5 +1,43 @@
 {
   "version": 2,
+  "builds": [
+    {
+      "src": "backend/api/index.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "backend/**"
+        ]
+      }
+    },
+    {
+      "src": "backend/api/auth.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "backend/**"
+        ]
+      }
+    },
+    {
+      "src": "backend/api/test.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "backend/**"
+        ]
+      }
+    },
+    {
+      "src": "backend/api/health.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": [
+          "backend/**"
+        ]
+      }
+    }
+  ],
   "routes": [
     {
       "src": "/api/auth(.*)",

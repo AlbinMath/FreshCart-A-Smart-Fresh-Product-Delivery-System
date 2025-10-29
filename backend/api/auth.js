@@ -6,9 +6,6 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Import auth routes
-import authRoutes from '../routes/authRoutes.js';
-
 const app = express();
 
 // CORS configuration for Vercel deployment
@@ -37,8 +34,30 @@ app.use((req, res, next) => {
   next();
 });
 
-// Auth Routes
-app.use('/api/auth', authRoutes);
+// Safely import and use auth routes
+try {
+  import('../routes/authRoutes.js').then(module => {
+    app.use('/api/auth', module.default);
+  }).catch(err => {
+    console.error('Failed to load auth routes:', err);
+    app.get('/api/auth/*', (req, res) => {
+      res.status(500).json({
+        success: false,
+        message: 'Auth routes failed to load',
+        error: err.message
+      });
+    });
+  });
+} catch (err) {
+  console.error('Error importing auth routes:', err);
+  app.get('/api/auth/*', (req, res) => {
+    res.status(500).json({
+      success: false,
+      message: 'Auth routes failed to load',
+      error: err.message
+    });
+  });
+}
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -51,6 +70,29 @@ app.get('/health', (req, res) => {
 
 // Basic Route
 app.get('/', (req, res) => res.send('FreshCart Auth API Running on Vercel'));
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  // Log the error with request details
+  console.error(`[${new Date().toISOString()}] Error in ${req.method} ${req.originalUrl}`, {
+    error: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    requestId: req.requestId,
+    body: req.body,
+    query: req.query,
+    params: req.params
+  });
+
+  // Send error response
+  const statusCode = err.statusCode || 500;
+  const message = statusCode === 500 ? 'Internal server error' : err.message;
+  
+  res.status(statusCode).json({
+    success: false,
+    message,
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+});
 
 // Export the app for Vercel serverless functions
 export default app;
